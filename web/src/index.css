@@ -4,6 +4,7 @@
 
 /* ─── 시간의 색 — JS가 data-time 속성을 root에 세팅 ─── */
 :root {
+  color-scheme: light;          /* iOS Safari 다크모드 자동 색상 왜곡 차단 */
   --bg:           #FFFBF2;
   --surface:      #FFFFFF;
   --surface-2:    #FBF5E5;
@@ -15,28 +16,43 @@
 }
 
 html[data-time="morning"] {
+  color-scheme: light;
   --bg: #FFFBF2; --surface: #FFFFFF; --surface-2: #FBF5E5; --border: #ECE3CB;
-  --text: #2A2522; --text-muted: #8A8270; --accent: #F5C842; --accent-strong: #D9A91A;
+  --text: #2A2522; --text-muted: #6B5F45; --accent: #F5C842; --accent-strong: #B8860B;
 }
 html[data-time="midday"] {
+  color-scheme: light;
   --bg: #F4F6FF; --surface: #FFFFFF; --surface-2: #EEF2FF; --border: #D8DEFF;
-  --text: #1F1B3A; --text-muted: #6B7280; --accent: #4F46E5; --accent-strong: #3730A3;
+  --text: #1F1B3A; --text-muted: #4B5563; --accent: #4F46E5; --accent-strong: #3730A3;
 }
 html[data-time="afternoon"] {
+  color-scheme: light;
   --bg: #FFF7ED; --surface: #FFFFFF; --surface-2: #FFEDD5; --border: #FED7AA;
-  --text: #27220F; --text-muted: #78716C; --accent: #F97316; --accent-strong: #C2410C;
+  --text: #27220F; --text-muted: #57534E; --accent: #F97316; --accent-strong: #C2410C;
 }
 html[data-time="evening"] {
+  color-scheme: dark;
   --bg: #1F1B2E; --surface: #2A2540; --surface-2: #342E4D; --border: #594F7E;
   --text: #F8F4FF; --text-muted: #C9BEE6; --accent: #C4B5FD; --accent-strong: #DDD6FE;
 }
 html[data-time="night"], html[data-time="dawn"] {
+  color-scheme: dark;
   --bg: #0F172A; --surface: #1E293B; --surface-2: #2B3548; --border: #475569;
   --text: #F1F5F9; --text-muted: #CBD5E1; --accent: #FBBF24; --accent-strong: #FCD34D;
 }
 
-html, body { background: var(--bg); color: var(--text); }
-body { font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+/* WebKit forced-color 자동 다크닝 차단 */
+@supports (-webkit-touch-callout: none) {
+  :root { -webkit-text-fill-color: var(--text); }
+}
+
+html, body { background: var(--bg) !important; color: var(--text) !important; }
+body {
+  font-family: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
+  font-weight: 400;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+}
 
 .en { font-family: 'Inter', system-ui, sans-serif; }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
