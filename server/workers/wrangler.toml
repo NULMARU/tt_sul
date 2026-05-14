@@ -1,0 +1,27 @@
+name = "sulsul-llm-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+
+# ─── KV Namespaces ───
+# Create with:  npx wrangler kv:namespace create CACHE
+#               npx wrangler kv:namespace create RATE
+# Then paste the IDs below.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REPLACE_WITH_KV_CACHE_ID"
+
+[[kv_namespaces]]
+binding = "RATE"
+id = "REPLACE_WITH_KV_RATE_ID"
+
+# ─── Secrets (set via `npx wrangler secret put NAME`) ───
+# - ANTHROPIC_API_KEY
+# - GEMINI_API_KEY
+
+[observability]
+enabled = true
+
+# ─── Optional: custom domain ───
+# [[routes]]
+# pattern = "llm.example.com/*"
+# zone_name = "example.com"

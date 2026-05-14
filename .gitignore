@@ -1,0 +1,39 @@
+# Claude Code local
+.claude/
+
+# dependencies
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# build output
+dist/
+*/dist/
+**/dist/
+*.tsbuildinfo
+
+# tsc emitted artifacts (from composite project mode)
+web/vite.config.js
+web/vite.config.d.ts
+web/tailwind.config.js
+web/tailwind.config.d.ts
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+.dev.vars
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Cloudflare Workers
+.wrangler/
+wrangler.toml.bak
+
+# logs
+*.log
+npm-debug.log*
