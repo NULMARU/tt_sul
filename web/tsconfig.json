@@ -14,11 +14,11 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "baseUrl": ".",
+    "types": ["node"],
     "paths": {
       "@shared/*": ["../src/*"],
       "@/*": ["src/*"]
     }
   },
-  "include": ["src", "../src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "../src", "vite.config.ts", "tailwind.config.ts"]
 }

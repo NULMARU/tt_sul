@@ -54,5 +54,10 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    fs: {
+      // ../src 의 공유 타입·시드를 dev 서버에서 import 허용
+      strict: false,
+      allow: [path.resolve(__dirname, ".."), path.resolve(__dirname)],
+    },
   },
 });
