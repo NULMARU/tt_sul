@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
-import { llmAvailable } from "../lib/llm";
+import { llmAvailable, llmProxyUrl, probeHealth, probeTest, type HealthResult } from "../lib/llm";
 
 export function Toolbelt() {
   const nav = useNavigate();
@@ -51,15 +52,9 @@ export function Toolbelt() {
         </Field>
       </Card>
 
-      <Card title="LLM 연결">
-        <div className="text-sm">
-          상태: {llmAvailable() ? <span className="text-success">✓ 프록시 연결됨</span> : <span className="text-warn">⚠ 미설정</span>}
-        </div>
-        <p className="text-xs text-text-muted leading-relaxed">
-          빌드 환경 변수 <code className="px-1 rounded bg-surface-2">VITE_LLM_PROXY_URL</code> 에 Cloudflare Workers URL을 설정하면<br />
-          작문 채점·일기→퀴즈·스토리 난이도 변환이 활성화됩니다.
-        </p>
-      </Card>
+      <LLMSection />
+
+
 
       <Card title="데이터">
         <Row label="📤 진행률 내보내기 (JSON)" action={doExport} />
@@ -71,6 +66,102 @@ export function Toolbelt() {
           🔥 스트릭 {stats.streak}일 · 카드 {stats.totalCardsViewed} · 퀴즈 {stats.totalQuizzesAttempted}회 · 학습 시간 {Math.floor(stats.totalStudySeconds / 60)}분 · TTS {stats.ttsPlays} · 스토리 {stats.storiesRead}
         </div>
       </Card>
+    </div>
+  );
+}
+
+function LLMSection() {
+  const [health, setHealth] = useState<HealthResult | null>(null);
+  const [test, setTest] = useState<(HealthResult & { sample?: string }) | null>(null);
+  const [busy, setBusy] = useState<"health" | "test" | null>(null);
+
+  async function runHealth() {
+    setBusy("health"); setHealth(null);
+    setHealth(await probeHealth());
+    setBusy(null);
+  }
+  async function runTest() {
+    setBusy("test"); setTest(null);
+    setTest(await probeTest());
+    setBusy(null);
+  }
+
+  return (
+    <section className="rounded-2xl bg-surface border border-border p-4 flex flex-col gap-3">
+      <h2 className="text-sm font-semibold text-text-muted">LLM 연결</h2>
+
+      <div className="text-sm">
+        프록시 URL:{" "}
+        {llmAvailable() ? (
+          <code className="px-1 rounded bg-surface-2 text-xs break-all">{llmProxyUrl()}</code>
+        ) : (
+          <span className="text-warn">⚠ 미설정</span>
+        )}
+      </div>
+
+      {!llmAvailable() && (
+        <p className="text-xs text-text-muted leading-relaxed">
+          빌드 환경 변수 <code className="px-1 rounded bg-surface-2">VITE_LLM_PROXY_URL</code> 을 설정하면 활성화됩니다.<br />
+          → <code className="px-1 rounded bg-surface-2">web/.env.local</code> 에 추가하고 <code className="px-1 rounded bg-surface-2">npm run dev</code> 재시작.<br />
+          가이드: docs/deploy-llm-proxy.md
+        </p>
+      )}
+
+      {llmAvailable() && (
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <button
+              onClick={runHealth}
+              disabled={!!busy}
+              className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm disabled:opacity-50"
+            >
+              {busy === "health" ? "확인 중…" : "헬스 체크"}
+            </button>
+            <button
+              onClick={runTest}
+              disabled={!!busy}
+              className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm disabled:opacity-50"
+            >
+              {busy === "test" ? "확인 중…" : "AI 호출 테스트"}
+            </button>
+          </div>
+
+          {health && (
+            <ResultBox
+              label="헬스 체크"
+              ok={health.ok}
+              latency={health.latency_ms}
+              detail={health.ok ? `model=${health.model ?? "?"} · time=${health.time ?? "?"}` : health.error}
+            />
+          )}
+          {test && (
+            <ResultBox
+              label="AI 호출 테스트"
+              ok={test.ok}
+              latency={test.latency_ms}
+              detail={test.ok ? `model=${test.model} · "${test.sample}"` : test.error}
+            />
+          )}
+        </div>
+      )}
+
+      <p className="text-xs text-text-muted leading-relaxed">
+        헬스 체크 = 프록시 연결만 확인 (LLM 호출 없음).<br />
+        AI 호출 테스트 = 실제 Claude API에 1회 호출하여 API 키와 라우팅 확인.
+      </p>
+    </section>
+  );
+}
+
+function ResultBox({ label, ok, latency, detail }: { label: string; ok: boolean; latency?: number; detail?: string }) {
+  return (
+    <div className={`text-xs rounded-lg border p-2 ${ok ? "border-success/40 bg-success/10" : "border-error/40 bg-error/10"}`}>
+      <div className="flex items-center gap-1.5">
+        <span>{ok ? "✓" : "✗"}</span>
+        <span className="font-medium">{label}</span>
+        {latency !== undefined && <span className="ml-auto text-text-muted">{latency}ms</span>}
+      </div>
+      {detail && <div className="mt-1 text-text-muted break-all">{detail}</div>}
     </div>
   );
 }

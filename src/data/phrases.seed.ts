@@ -165,6 +165,34 @@ export const PHRASES: Phrase[] = [
   { id: "worried",          ko: "걱정돼",            en: "I'm worried",                              coords: { days: [17], stages: ["stage-3"], places: ["bedroom"], situations: ["winding_down"], times: ["night"] }, tags: ["emotion-negative"] },
   { id: "nervous",          ko: "긴장돼",            en: "I'm nervous",                              coords: { days: [17], stages: ["stage-3"], places: ["office"], situations: ["meeting"], times: ["morning"] }, tags: ["emotion-negative"] },
   { id: "cant_focus",       ko: "집중이 안 돼",      en: "I can't focus",                            coords: { days: [17], stages: ["stage-3"], places: ["office"], situations: ["work_start"], times: ["afternoon"] }, tags: ["emotion-negative"] },
+
+  // ─── Stage 4 · 문장 패턴 ───
+  // Day 22 · I'm going to (계획)
+  { id: "going_to_try",     ko: "해볼 거야",           en: "I'm going to try",                          coords: { days: [22], stages: ["stage-4"], places: ["office"], situations: ["work_start"], times: ["morning"] }, tags: ["pattern-going-to"] },
+  { id: "going_to_start",   ko: "시작할 거야",         en: "I'm going to start",                        coords: { days: [22], stages: ["stage-4"], places: ["office"], situations: ["work_start"], times: ["morning"] }, tags: ["pattern-going-to"] },
+  { id: "going_to_ask",     ko: "물어볼 거야",         en: "I'm going to ask for help",                 coords: { days: [22], stages: ["stage-4"], places: ["office"], situations: ["work_start"], times: ["morning"] }, tags: ["pattern-going-to"] },
+  { id: "not_going_to_wait",ko: "기다리지 않을 거야",  en: "I'm not going to wait",                     coords: { days: [22], stages: ["stage-4"], places: ["office"], situations: ["work_start"], times: ["morning"] }, tags: ["pattern-going-to"] },
+
+  // Day 23 · I used to (과거 습관)
+  { id: "used_to_hate",     ko: "예전에는 싫어했어",   en: "I used to hate it",                         coords: { days: [23], stages: ["stage-4"], places: ["kitchen"], situations: ["morning_routine"], times: ["morning"] }, tags: ["pattern-used-to"] },
+  { id: "used_to_snooze",   ko: "예전에는 알람을 미뤘어", en: "I used to snooze",                       coords: { days: [23], stages: ["stage-4"], places: ["bedroom"], situations: ["alarm_off"], times: ["morning"] }, tags: ["pattern-used-to"] },
+  { id: "used_to_skip",     ko: "예전에는 거르곤 했어", en: "I used to skip breakfast",                 coords: { days: [23], stages: ["stage-4"], places: ["kitchen"], situations: ["breakfast"], times: ["morning"] }, tags: ["pattern-used-to"] },
+
+  // Day 24 · If (조건문)
+  { id: "if_rains_stay",    ko: "비 오면 집에 있어",   en: "If it rains, we stay home",                 coords: { days: [24], stages: ["stage-4"], places: ["livingroom"], situations: ["small_talk"], times: ["evening"] }, tags: ["pattern-if"] },
+  { id: "if_sunny_hike",    ko: "날씨 좋으면 등산",    en: "If it's sunny, we hike",                    coords: { days: [24], stages: ["stage-4"], places: ["livingroom"], situations: ["small_talk"], times: ["evening"] }, tags: ["pattern-if"] },
+
+  // Day 25 · I should have (후회)
+  { id: "should_have_said", ko: "말했어야 했어",       en: "I should have said something",              coords: { days: [25], stages: ["stage-4"], places: ["office"], situations: ["winding_down"], times: ["evening"] }, tags: ["pattern-should-have"] },
+  { id: "should_have_spoken",ko: "목소리를 냈어야 했어",en: "I should have spoken up",                  coords: { days: [25], stages: ["stage-4"], places: ["office"], situations: ["meeting"], times: ["evening"] }, tags: ["pattern-should-have"] },
+
+  // Day 26 · It's been (소요·경험)
+  { id: "its_been_a_day",   ko: "오늘 하루 길었어",    en: "It's been a day",                           coords: { days: [26], stages: ["stage-4"], places: ["livingroom"], situations: ["winding_down"], times: ["night"] }, tags: ["pattern-its-been"] },
+  { id: "its_been_one_of",  ko: "그런 날이었어",       en: "It's been one of those days",               coords: { days: [26], stages: ["stage-4"], places: ["livingroom"], situations: ["winding_down"], times: ["night"] }, tags: ["pattern-its-been"] },
+
+  // Day 27 · Just in case (대비)
+  { id: "just_in_case",     ko: "혹시 모르니까",       en: "just in case",                              coords: { days: [27], stages: ["stage-4"], places: ["entrance"], situations: ["morning_routine"], times: ["morning"] }, tags: ["pattern-just-in-case"] },
+  { id: "take_umbrella",    ko: "우산을 챙겨",         en: "I'll take an umbrella",                     coords: { days: [27], stages: ["stage-4"], places: ["entrance"], situations: ["morning_routine"], times: ["morning"] }, tags: ["pattern-just-in-case"] },
 ];
 
 export const PHRASE_BY_ID: Record<string, Phrase> = Object.fromEntries(PHRASES.map(p => [p.id, p]));

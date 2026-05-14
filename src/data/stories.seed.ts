@@ -1,6 +1,6 @@
 // ============================================================
-// Daily Story 시드 — Day 1–14 풀 본문 + Day 15–30 메타데이터
-// 30일 주인공 한 명의 일기처럼 연결되는 스토리 라인
+// Daily Story 시드 — Day 1–30 모두 풀 본문
+// 30일 주인공 한 명의 일기처럼 연결되는 연속극
 // 각 본문: easy(쉬움) / natural(자연) / challenge(도전) 3난이도
 // ============================================================
 import type { Story } from "../types/schema";
@@ -339,23 +339,442 @@ I make it to Aisle 7 and meet a wall of milk. Whole, 2%, skim, lactose-free, oat
     },
   },
 
-  // ─── Day 15–30 (Metadata only — 본문은 추후 작성/LLM 생성) ───
-  { id: "story-day-15", day: 15, title: "I Think I'm Coming Down", genre: "diary",    place: "bedroom",    time: "afternoon", situations: ["winding_down"],            phraseIds: ["have_headache", "feel_sick"], body: {} },
-  { id: "story-day-16", day: 16, title: "Best Morning in a While", genre: "diary",    place: "kitchen",    time: "morning",   situations: ["morning_routine"],         phraseIds: ["feel_great", "good_mood", "motivated"], body: {} },
-  { id: "story-day-17", day: 17, title: "Stuck in Traffic",        genre: "diary",    place: "street",     time: "morning",   situations: ["commute_bus"],             phraseIds: ["stressed_out", "annoyed", "cant_focus"], body: {} },
-  { id: "story-day-18", day: 18, title: "That New Cafe",           genre: "dialogue", place: "cafe",       time: "afternoon", situations: ["coffee_order", "small_talk"], phraseIds: [], body: {} },
-  { id: "story-day-19", day: 19, title: "I'm Sorry, Really",       genre: "dialogue", place: "office",     time: "midday",    situations: ["apology", "meeting"],      phraseIds: [], body: {} },
-  { id: "story-day-20", day: 20, title: "Two Lines, Same Bench",   genre: "dialogue", place: "park",       time: "evening",   situations: ["small_talk"],              phraseIds: [], body: {} },
-  { id: "story-day-21", day: 21, title: "Week 3 Recap",            genre: "column",   place: "livingroom", time: "evening",   situations: ["winding_down"],            phraseIds: [], body: {} },
-  { id: "story-day-22", day: 22, title: "I'm Going to Try",        genre: "diary",    place: "office",     time: "morning",   situations: ["work_start"],              phraseIds: [], body: {} },
-  { id: "story-day-23", day: 23, title: "I Used to Hate Mornings", genre: "diary",    place: "kitchen",    time: "morning",   situations: ["morning_routine"],         phraseIds: [], body: {} },
-  { id: "story-day-24", day: 24, title: "If It Rains Tomorrow",    genre: "dialogue", place: "livingroom", time: "evening",   situations: ["small_talk"],              phraseIds: [], body: {} },
-  { id: "story-day-25", day: 25, title: "What I Should Have Said", genre: "diary",    place: "office",     time: "evening",   situations: ["winding_down"],            phraseIds: [], body: {} },
-  { id: "story-day-26", day: 26, title: "It's Been a Day",         genre: "diary",    place: "livingroom", time: "night",     situations: ["winding_down"],            phraseIds: [], body: {} },
-  { id: "story-day-27", day: 27, title: "Just in Case",            genre: "dialogue", place: "entrance",   time: "morning",   situations: ["morning_routine"],         phraseIds: [], body: {} },
-  { id: "story-day-28", day: 28, title: "Week 4 Recap",            genre: "column",   place: "livingroom", time: "evening",   situations: ["winding_down"],            phraseIds: [], body: {} },
-  { id: "story-day-29", day: 29, title: "A Day in the Life",       genre: "diary",    place: "livingroom", time: "evening",   situations: ["winding_down"],            phraseIds: [], body: {} },
-  { id: "story-day-30", day: 30, title: "Tomorrow, In English",    genre: "column",   place: "livingroom", time: "night",     situations: ["winding_down"],            phraseIds: [], body: {} },
+  // ─── Day 15 ───
+  {
+    id: "story-day-15",
+    day: 15,
+    title: "I Think I'm Coming Down",
+    genre: "diary",
+    place: "bedroom",
+    time: "afternoon",
+    situations: ["winding_down"],
+    phraseIds: ["have_headache", "feel_sick", "im_exhausted", "cant_focus"],
+    body: {
+      easy: `My head hurts. I have a headache. I feel sick. I have no energy. I can't focus. I tell my boss. I go home. I lie down. Tomorrow I hope I am better.`,
+      natural: `I have a headache. The kind that builds slowly and then takes over. By 2 PM, I feel sick and I can't focus on anything. I tell my boss I'm going to head home, and she nods — she's seen this version of me before. I lie down on the couch with a glass of water and a quiet prayer for tomorrow-me.`,
+      challenge: `Headache. The slow-build kind that announces itself politely at 11 AM and is running the show by 2. I feel sick, I'm exhausted, my brain has filed for resignation. I tell my boss I'm coming down with something — she doesn't ask twice — and somehow drag myself home. Couch, water, blanket. The day is officially canceled. I send a quiet apology to tomorrow-me and hope the universe is feeling lenient.`,
+    },
+    comprehension: {
+      summary:  { question: "Why does the narrator go home early?", answer: "feeling sick / has a headache" },
+      fill:     { sentence: "I have a ___.", answer: "headache" },
+      inference:{ question: "How will the narrator likely spend the evening?", choices: ["Going out", "Resting at home", "Working from home", "Cleaning"], answer: 1 },
+    },
+  },
+
+  // ─── Day 16 ───
+  {
+    id: "story-day-16",
+    day: 16,
+    title: "Best Morning in a While",
+    genre: "diary",
+    place: "kitchen",
+    time: "morning",
+    situations: ["morning_routine"],
+    phraseIds: ["feel_great", "good_mood", "motivated", "brew_coffee"],
+    body: {
+      easy: `I wake up. I feel great. I am in a good mood. The sun is bright. I brew some coffee. I feel motivated. I will have a good day. I want to start work right away.`,
+      natural: `I wake up and — for once — I feel great. I'm in a good mood before my feet even hit the floor, which is rare. The kitchen smells like coffee I haven't made yet. I'm motivated. Like, dangerously motivated. I might actually finish that thing today.`,
+      challenge: `I wake up feeling great, which is so out of character I almost don't trust it. Good mood, full battery, the sunrise looking like a Hallmark card. I'm motivated — not the fake productive-Instagram kind, but the real kind, where the to-do list looks like a fun puzzle. Coffee tastes like a five-star review. Today is going to be one of those days. I'll pay for it tomorrow, but today is mine.`,
+    },
+    comprehension: {
+      summary:  { question: "How does the narrator feel this morning?", answer: "great / motivated" },
+      fill:     { sentence: "I'm in a ___ mood.", answer: "good" },
+      inference:{ question: "How does the narrator react to feeling so good?", choices: ["Suspicious of it", "Ready to take advantage", "Both — wary but happy", "Anxious it won't last"], answer: 2 },
+    },
+  },
+
+  // ─── Day 17 ───
+  {
+    id: "story-day-17",
+    day: 17,
+    title: "Stuck in Traffic",
+    genre: "diary",
+    place: "street",
+    time: "morning",
+    situations: ["commute_bus"],
+    phraseIds: ["stressed_out", "annoyed", "cant_focus", "take_deep_breath"],
+    body: {
+      easy: `The bus is slow. There is too much traffic. I am stressed out. I am annoyed. I check my watch. I can't focus on my book. I will be late. I close my eyes. I take a deep breath.`,
+      natural: `The bus has been stuck on the same block for ten minutes. I'm stressed out, annoyed, and I can't focus on the article I'm pretending to read. I check the time. I'll be twenty minutes late, easy. I close my eyes, take a deep breath, and try to remember it's not personal — just traffic.`,
+      challenge: `Bus. Frozen on the same block for the past eleven minutes. I'm stressed out and annoyed, and the article on my phone might as well be in cuneiform — I can't focus. Twenty minutes late, minimum. I draft three increasingly passive-aggressive Slack messages, delete all of them, and close my eyes. Deep breath. It's not personal. It's just a city. Breathe.`,
+    },
+    comprehension: {
+      summary:  { question: "Why is the narrator stressed?", answer: "stuck in traffic, will be late" },
+      fill:     { sentence: "I'm ___ out.", answer: "stressed" },
+      inference:{ question: "How does the narrator try to cope?", choices: ["Calls boss", "Closes eyes and breathes", "Gets off the bus", "Sends angry Slack messages"], answer: 1 },
+    },
+  },
+
+  // ─── Day 18 ───
+  {
+    id: "story-day-18",
+    day: 18,
+    title: "That New Cafe",
+    genre: "dialogue",
+    place: "cafe",
+    time: "afternoon",
+    situations: ["coffee_order", "small_talk"],
+    phraseIds: ["place_order", "wait_in_line"],
+    body: {
+      easy: `Me: This is the new cafe.
+Friend: It is small.
+Me: But it is cute.
+Friend: The coffee is expensive.
+Me: I will get a latte.
+Friend: It is too expensive.
+Me: But it is good. Let's wait in line.`,
+      natural: `"Welcome to The New Cafe That Everyone's Talking About," I say, opening the door.
+"Wow. Smaller than I expected."
+"Smaller and twice the price."
+"Is it good though?"
+"It's great. But it's too expensive."
+We wait in line and place an order: one latte, one cortado. She winces at the total.
+"Then why are we here?"
+"Because that's how cafes work in this city."`,
+      challenge: `"Welcome to The New Cafe That Everyone Is Talking About," I say, pushing the door open with theatrical flair.
+"Wow. It's tiny."
+"Tiny and four-dollars-too-expensive."
+"Is it good, at least?"
+"It's great. Annoyingly great. The kind of great where you can't even complain about the price with conviction."
+We wait in line. I place the order — latte and a cortado — and her face does a small math equation when the total appears.
+"So why are we here?"
+"Because in this city, suffering quietly in line for an eight-dollar latte is what we call a 'lifestyle.'"`,
+    },
+    comprehension: {
+      summary:  { question: "What's the friend's first impression?", answer: "small" },
+      fill:     { sentence: "It is too ___.", answer: "expensive" },
+      inference:{ question: "Why do they go anyway?", choices: ["The narrator works there", "It's the trendy thing to do", "It's free", "Closest to the office"], answer: 1 },
+    },
+  },
+
+  // ─── Day 19 ───
+  {
+    id: "story-day-19",
+    day: 19,
+    title: "I'm Sorry, Really",
+    genre: "dialogue",
+    place: "office",
+    time: "midday",
+    situations: ["apology", "meeting"],
+    phraseIds: [],
+    body: {
+      easy: `Me: I am sorry. I missed the deadline.
+Boss: I know. What happened?
+Me: I had too much work. I am sorry, really.
+Boss: It is okay. But please tell me earlier next time.
+Me: I will. Thank you.`,
+      natural: `"I'm sorry," I say, and I mean it. "I missed the deadline."
+"I noticed." His tone is flat, not angry, which is somehow worse.
+"It got buried. I should have flagged it earlier."
+"You should have. Will it be done today?"
+"By end of day. I'm sorry, really."
+"Apologies are cheap. Just send the file."`,
+      challenge: `"I'm sorry," I say, standing in his doorway like a kid in front of the principal. "I missed the deadline."
+"I noticed." Flat, not angry, which is somehow ten times worse than angry.
+"It got buried. I should have flagged it earlier."
+"You should have. Will it be done today?"
+"By end of day. I'm sorry — really, this time."
+"Apologies are cheap. Send the file by five." A pause. "And next time? Raise your hand before it's on fire, not after."`,
+    },
+    comprehension: {
+      summary:  { question: "Why is the narrator apologizing?", answer: "missed a deadline" },
+      fill:     { sentence: "I'm ___, really.", answer: "sorry" },
+      inference:{ question: "What does the boss prioritize?", choices: ["Long apologies", "Action over apologies", "Punishment", "Avoiding the conversation"], answer: 1 },
+    },
+  },
+
+  // ─── Day 20 ───
+  {
+    id: "story-day-20",
+    day: 20,
+    title: "Two Lines, Same Bench",
+    genre: "dialogue",
+    place: "park",
+    time: "evening",
+    situations: ["small_talk"],
+    phraseIds: ["take_a_walk"],
+    body: {
+      easy: `Stranger: Beautiful sunset.
+Me: Yes. It is nice.
+Stranger: Do you come here often?
+Me: Sometimes. After work.
+Stranger: I come to take a walk. It helps.
+Me: Same. The park is good for that.`,
+      natural: `"Beautiful sunset, huh?"
+"Yeah. It really is."
+"You come here often?"
+"After work, sometimes. You?"
+"Lately, more than I'd like to admit. I take a walk, clears my head."
+"Same. Hard to find quiet in this city."
+"Even the quiet here isn't quiet. But it'll do."`,
+      challenge: `"Beautiful sunset, huh?" the stranger says, not looking at me.
+"Yeah. Really is."
+"You come here often?"
+"After work, when the apartment feels too small."
+"Same. I come to take a walk. Lately more than I'd like to admit. Clears the head."
+"Same. Hard to find quiet in this city."
+"Even the quiet here isn't quiet." He laughs at his own line, soft. "But it beats the alternative."
+We sit in the not-quiet for a while. That's all the conversation we have. It's enough.`,
+    },
+    comprehension: {
+      summary:  { question: "Why does the stranger come to the park?", answer: "to clear their head" },
+      fill:     { sentence: "It clears my ___.", answer: "head" },
+      inference:{ question: "What's the mood of the conversation?", choices: ["Awkward and forced", "Quietly companionable", "Intense", "Romantic"], answer: 1 },
+    },
+  },
+
+  // ─── Day 21 — Week 3 column ───
+  {
+    id: "story-day-21",
+    day: 21,
+    title: "Week 3 Recap",
+    genre: "column",
+    place: "livingroom",
+    time: "evening",
+    situations: ["winding_down"],
+    phraseIds: [],
+    body: {
+      easy: `Three weeks done. This week was emotions. Happy, sad, tired, sick, stressed. So many feelings. So many words. I learned "I'm stressed out." I used it three times. It is useful. But I want a better week next week.`,
+      natural: `Three weeks in. This week was emotions, which means I spent five days saying "I'm tired," "I'm stressed," "I'm sleepy," "I have a headache" — and once, gloriously, "I feel great." Feelings have a lot of vocabulary, it turns out. I'm slowly learning to put a name on the thing inside me before it turns into a mood.`,
+      challenge: `Week three: emotions. Which, in practice, meant five days of saying "I'm stressed out," "I'm exhausted," "I have a headache," and — on one shining Tuesday — "I feel great." Turns out the inside of a person has its own vocabulary. I'm learning to name the thing before it takes the wheel. Slow progress. But there's a real difference between "I feel weird" and "I'm overwhelmed," and apparently English is going to be the first language where I notice it. Weird.`,
+    },
+    comprehension: {
+      summary:  { question: "What was this week's theme?", answer: "emotions" },
+      fill:     { sentence: "I'm stressed ___.", answer: "out" },
+      inference:{ question: "What did the narrator learn?", choices: ["More verbs", "Naming feelings precisely", "How to memorize", "Grammar rules"], answer: 1 },
+    },
+  },
+
+  // ─── Day 22 ───
+  {
+    id: "story-day-22",
+    day: 22,
+    title: "I'm Going to Try",
+    genre: "diary",
+    place: "office",
+    time: "morning",
+    situations: ["work_start"],
+    phraseIds: ["start_work", "write_report", "take_notes"],
+    body: {
+      easy: `Today is Monday. I'm going to start the new project. I'm going to write a plan. I'm going to ask for help. I'm not going to wait until the last minute. I'm going to try.`,
+      natural: `Monday again. I'm going to start the new project today. I'm going to write a proper plan instead of winging it. I'm going to ask for help when I need it — which past-me never did. I'm not going to wait until Thursday to panic. I'm going to try. Try is the operative word.`,
+      challenge: `Monday, again, somehow. I'm going to start the new project today — not "soon," not "after lunch," today. I'm going to write a plan like an adult. I'm going to ask for help before the wheels come off, instead of two days after, like usual. I'm going to try. "Try" is doing a lot of heavy lifting in that sentence, but it's honest, and that's a start.`,
+    },
+    comprehension: {
+      summary:  { question: "What's the narrator planning to do differently?", answer: "ask for help early, write a plan, not procrastinate" },
+      fill:     { sentence: "I'm ___ to try.", answer: "going" },
+      inference:{ question: "How does the narrator feel about this commitment?", choices: ["Overconfident", "Cautiously hopeful", "Despairing", "Bored"], answer: 1 },
+    },
+  },
+
+  // ─── Day 23 ───
+  {
+    id: "story-day-23",
+    day: 23,
+    title: "I Used to Hate Mornings",
+    genre: "diary",
+    place: "kitchen",
+    time: "morning",
+    situations: ["morning_routine"],
+    phraseIds: ["wake_up", "snooze_alarm", "get_dressed", "brew_coffee"],
+    body: {
+      easy: `I used to hate mornings. I used to snooze five times. I used to skip breakfast. Now I wake up faster. Now I eat something small. I am not a morning person yet. But I used to be worse.`,
+      natural: `I used to hate mornings. Capital-H Hate. I used to snooze five times, skip breakfast, and stumble out the door with my shirt half-buttoned. Lately I'm up after one snooze. I get dressed properly. I brew coffee. I eat something — not a full breakfast, but something. I'm not a morning person. But I used to be much worse.`,
+      challenge: `I used to hate mornings with the kind of fervor people usually reserve for tax season. I used to snooze five times, skip breakfast, stumble out half-dressed. These days? One snooze, max. Coffee brewed, not pleaded for. Something resembling food. A face that doesn't terrify strangers. I'm still not a morning person — let's not get carried away — but the version of me from three months ago wouldn't recognize the version brewing coffee at 7:15 like it's a personality trait. Progress is sneaky.`,
+    },
+    comprehension: {
+      summary:  { question: "How has the narrator changed?", answer: "mornings used to be chaotic, now manageable" },
+      fill:     { sentence: "I ___ to hate mornings.", answer: "used" },
+      inference:{ question: "What's the narrator's attitude toward their progress?", choices: ["Disappointed", "Quietly proud and amused", "Confused", "Indifferent"], answer: 1 },
+    },
+  },
+
+  // ─── Day 24 ───
+  {
+    id: "story-day-24",
+    day: 24,
+    title: "If It Rains Tomorrow",
+    genre: "dialogue",
+    place: "livingroom",
+    time: "evening",
+    situations: ["small_talk"],
+    phraseIds: [],
+    body: {
+      easy: `Friend: If it rains tomorrow, what will we do?
+Me: If it rains, we will stay home.
+Friend: If it is sunny, we can hike.
+Me: Yes. If it is sunny, we hike. If not, we watch a movie.
+Friend: Okay. If we hike, you bring snacks.`,
+      natural: `"If it rains tomorrow, what's the plan?" she asks.
+"If it rains, we stay home and order pizza."
+"And if it doesn't?"
+"If it doesn't, we hike. The short trail. I am not doing the long one."
+"Deal. If we go, you bring the snacks."
+"If we go, I bring the snacks. If we don't, you owe me a movie."`,
+      challenge: `"If it rains tomorrow, what's the plan?" she asks, scrolling through the weather app for the fourth time.
+"If it rains, we stay home, order pizza, and pretend we wanted to."
+"And if it doesn't?"
+"If it doesn't, we hike. The short trail. The long trail is not happening — I'm twenty-eight, not twenty."
+"Deal. If we go, you bring snacks."
+"If we go, I bring snacks. If we don't, you owe me a movie of your choosing, which I reserve the right to complain about."
+"Fair."`,
+    },
+    comprehension: {
+      summary:  { question: "What are they planning?", answer: "tomorrow's activity, depending on weather" },
+      fill:     { sentence: "___ it rains, we stay home.", answer: "If" },
+      inference:{ question: "What's the dynamic between the two?", choices: ["Strangers being polite", "Comfortable old friends", "Co-workers", "First date"], answer: 1 },
+    },
+  },
+
+  // ─── Day 25 ───
+  {
+    id: "story-day-25",
+    day: 25,
+    title: "What I Should Have Said",
+    genre: "diary",
+    place: "office",
+    time: "evening",
+    situations: ["winding_down"],
+    phraseIds: [],
+    body: {
+      easy: `Today, my coworker took my idea. He spoke first in the meeting. I should have spoken up. I should have said it was my idea. I didn't. Tonight, I am replaying it. I should have said something.`,
+      natural: `My coworker took my idea today. Casual as anything — opened the meeting with it like it was a fresh thought. I should have spoken up. I should have said, "Actually, we discussed this last week — that's my framing." I didn't. Now it's 10 PM and I'm replaying the moment, perfecting the version of me who said something.`,
+      challenge: `He took my idea. Walked into the meeting and used it like it was something he thought of in the shower. I should have said something. I should have said, "I appreciate the build, but that framing is from our 1:1 last week" — calm, professional, lethal. I didn't. So now I'm at 10 PM, doing the great human pastime: rehearsing yesterday's argument in tonight's kitchen. I should have. I should have. The two most useless words in any language.`,
+    },
+    comprehension: {
+      summary:  { question: "What is the narrator regretting?", answer: "not speaking up when coworker took their idea" },
+      fill:     { sentence: "I ___ have said something.", answer: "should" },
+      inference:{ question: "What is the narrator's mood?", choices: ["Calm and forgiving", "Frustrated with themselves", "Angry at coworker", "Indifferent"], answer: 1 },
+    },
+  },
+
+  // ─── Day 26 ───
+  {
+    id: "story-day-26",
+    day: 26,
+    title: "It's Been a Day",
+    genre: "diary",
+    place: "livingroom",
+    time: "night",
+    situations: ["winding_down"],
+    phraseIds: ["sit_on_couch", "im_exhausted"],
+    body: {
+      easy: `It's been a day. Long. Hard. Many meetings. Many problems. It's been one of those days. I sit on the couch. I do nothing. It's been too much. I am okay. Just exhausted.`,
+      natural: `It's been a day. The kind where you sit on the couch at 9 PM and realize you haven't actually sat in twelve hours. It's been one of those days. Meetings, fires, more meetings. I'm not upset. I'm exhausted. Tomorrow I'll be fine. Tonight I'm just going to be a person on a couch.`,
+      challenge: `It's been a day. Not bad, not great — just a lot. The kind where 9 PM hits and you realize you've been vertical and verbal since 7 AM and you have one functional brain cell left, and it's currently watching the ceiling. It's been one of those days. Meetings, fires, more meetings, a Slack ping at 8:47 that I am choosing to ignore until morning. I'm exhausted. Not sad, not angry. Just emptied. Tomorrow's problem.`,
+    },
+    comprehension: {
+      summary:  { question: "What kind of day did the narrator have?", answer: "long, busy, exhausting" },
+      fill:     { sentence: "___ been a day.", answer: "It's" },
+      inference:{ question: "How is the narrator coping right now?", choices: ["Resting and accepting it", "Angry venting", "Working through it", "Calling someone"], answer: 0 },
+    },
+  },
+
+  // ─── Day 27 ───
+  {
+    id: "story-day-27",
+    day: 27,
+    title: "Just in Case",
+    genre: "dialogue",
+    place: "entrance",
+    time: "morning",
+    situations: ["morning_routine"],
+    phraseIds: ["head_out", "grab_keys", "grab_phone", "check_weather"],
+    body: {
+      easy: `Roommate: It looks cloudy.
+Me: Yes. I will take my umbrella.
+Roommate: Just in case?
+Me: Just in case.
+Roommate: Smart.
+Me: I always forget. Then it rains. Then I am wet.`,
+      natural: `"Looks like it might rain," my roommate says, peering out the window.
+"I'll grab an umbrella."
+"Just in case?"
+"Just in case. I always forget, and then it rains exactly twenty minutes after I leave."
+I check the weather one more time, grab my keys, grab my phone.
+"You're learning."
+"Took me twenty-eight years."`,
+      challenge: `"Looks like it might rain," my roommate says, peering out the window with the gravitas of a meteorologist.
+"I'm taking an umbrella."
+"Just in case?"
+"Just in case. History has shown that the precise moment I head out without one, the sky takes it personally."
+I check the weather, grab my keys, grab my phone, grab the umbrella. The full adult checklist.
+"Look at you. Adulting."
+"Took me twenty-eight years and approximately fourteen ruined shirts."
+"Worth it."`,
+    },
+    comprehension: {
+      summary:  { question: "Why is the narrator taking an umbrella?", answer: "just in case it rains" },
+      fill:     { sentence: "___ in case.", answer: "Just" },
+      inference:{ question: "What does this say about the narrator?", choices: ["Always overprepared", "Finally learning from past mistakes", "Worried", "Doesn't trust weather"], answer: 1 },
+    },
+  },
+
+  // ─── Day 28 — Week 4 column ───
+  {
+    id: "story-day-28",
+    day: 28,
+    title: "Week 4 Recap",
+    genre: "column",
+    place: "livingroom",
+    time: "evening",
+    situations: ["winding_down"],
+    phraseIds: [],
+    body: {
+      easy: `Four weeks. One month. I can now say "I'm going to," "I used to," "if," "should have," "just in case." Five sentence patterns. They open many doors. Next week is the last week. I will use everything.`,
+      natural: `Four weeks. One month down. The big sentence patterns clicked this week — "I'm going to," "I used to," "if," "should have," "just in case." Five tiny shapes that, together, let me talk about plans, regrets, and what-ifs. The grammar suddenly has rooms in it. I want to live in them.`,
+      challenge: `Four weeks. One month, somehow. The big patterns landed this week: I'm going to, I used to, if, I should have, just in case. Five small molds, but together they unlock something — I can finally talk about plans, regrets, hypotheticals, what-ifs. The grammar opened up like a house. I keep finding new rooms. One more week. The thing I was scared of last month feels weirdly like home now.`,
+    },
+    comprehension: {
+      summary:  { question: "What did the narrator master this week?", answer: "five sentence patterns" },
+      fill:     { sentence: "I'm ___ to.", answer: "going" },
+      inference:{ question: "How does the narrator feel after a month?", choices: ["Overwhelmed", "At home and confident", "Lost", "Bored"], answer: 1 },
+    },
+  },
+
+  // ─── Day 29 ───
+  {
+    id: "story-day-29",
+    day: 29,
+    title: "A Day in the Life",
+    genre: "diary",
+    place: "livingroom",
+    time: "evening",
+    situations: ["winding_down"],
+    phraseIds: ["wake_up", "brush_teeth", "head_out", "tap_card", "sit_at_desk", "check_emails", "take_a_break", "take_a_walk", "do_dishes", "lie_down", "fall_asleep"],
+    body: {
+      easy: `Today is a normal day. I wake up. I get dressed. I head out. I take the bus. I sit at my desk. I check my emails. I take a break. I do the dishes. I take a walk. I lie down. I fall asleep. In English, the whole day. I did it.`,
+      natural: `Today, just to see, I tried to live the whole day in English in my head. I wake up. I brush my teeth. I head out. I tap my card. I sit down at my desk. I check my emails. I take a break. I get some coffee. I wrap up my work. I go home. I do the dishes. I take a walk. I lie down. I fall asleep. The day, narrated from inside. It worked. It felt — boringly, beautifully — normal.`,
+      challenge: `Today I ran an experiment: live the entire day in English, in my head. Wake up. Brush my teeth. Head out. Tap my card. Drop into my chair. Check my emails. Wrap up the report. Take a break. Take a walk. Do the dishes. Lie down. Fall asleep. No translation, no panic, just the steady internal monologue of a person doing the small things that fill a life. It worked. It also revealed something embarrassing: most of my day, in any language, is unremarkable verbs. Which, somehow, is exactly the point.`,
+    },
+    comprehension: {
+      summary:  { question: "What experiment did the narrator try?", answer: "narrate the whole day in English" },
+      fill:     { sentence: "I ___ my emails.", answer: "check" },
+      inference:{ question: "What does the narrator realize?", choices: ["Days are exciting", "Most of life is small repeating actions", "English is hard", "Verbs are useless"], answer: 1 },
+    },
+  },
+
+  // ─── Day 30 — Graduation column ───
+  {
+    id: "story-day-30",
+    day: 30,
+    title: "Tomorrow, In English",
+    genre: "column",
+    place: "livingroom",
+    time: "night",
+    situations: ["winding_down"],
+    phraseIds: [],
+    body: {
+      easy: `Thirty days. I started with "I wake up." I end with "I fall asleep." Now I can talk about my day. I can ask, I can answer, I can apologize, I can plan. I am not perfect. I am not fast. But I started. And I kept going. Tomorrow, again.`,
+      natural: `Thirty days. I started with "I wake up" and somehow ended up able to narrate a full day, hold a small dialogue, apologize, plan, say what I used to do and what I should have said. I'm not fluent. I'm not fast. But I'm in the language now, not outside it pressing my nose against the glass. Tomorrow, again.`,
+      challenge: `Thirty days. Started with "I wake up," a sentence I could've said with my eyes closed in any language. Ended up able to narrate a day, hold a small dialogue, apologize without melting, plan without flinching, say "I used to" and "I should have" like they belong to me — because, somehow, they do now. I'm not fluent. I'm not fast. But I'm not standing outside the language anymore with my nose to the glass. I'm in. Just barely, but I'm in. Tomorrow, again. That's the whole secret.`,
+    },
+    comprehension: {
+      summary:  { question: "What has the narrator achieved?", answer: "can narrate a full day in English, hold dialogues, plan, apologize" },
+      fill:     { sentence: "___, again.", answer: "Tomorrow" },
+      inference:{ question: "What's the narrator's tone at the end?", choices: ["Disappointed", "Grateful, humble, ready to continue", "Done with English", "Overconfident"], answer: 1 },
+    },
+  },
 ];
 
 export const STORY_BY_ID: Record<string, Story> = Object.fromEntries(STORIES.map(s => [s.id, s]));

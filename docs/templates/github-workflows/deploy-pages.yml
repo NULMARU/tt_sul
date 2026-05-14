@@ -1,0 +1,72 @@
+name: Deploy PWA to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "web/**"
+      - "src/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+# GitHub Pages 권한
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 동시 배포 방지
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Inject LLM proxy URL (if set)
+        working-directory: web
+        run: |
+          if [ -n "${{ vars.LLM_PROXY_URL }}" ]; then
+            echo "VITE_LLM_PROXY_URL=${{ vars.LLM_PROXY_URL }}" > .env.local
+            echo "LLM proxy URL injected."
+          else
+            echo "No LLM_PROXY_URL — building without AI features."
+          fi
+
+      - name: Build
+        working-directory: web
+        run: npm run build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

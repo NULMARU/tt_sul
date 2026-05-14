@@ -6,7 +6,7 @@
 
 export interface Env {
   ANTHROPIC_API_KEY: string;
-  GEMINI_API_KEY: string;
+  GEMINI_API_KEY?: string;
   CACHE: KVNamespace;
   RATE: KVNamespace;
 }
@@ -17,8 +17,8 @@ const ALLOWED_ORIGINS = [
   "http://localhost:4173",
 ];
 
-const DAILY_TOKEN_QUOTA = 50_000;
 const DAILY_CALL_QUOTA = 200;
+const MODEL = "claude-haiku-4-5";
 
 // ─── System prompts (cached via Anthropic prompt caching) ───
 const SYSTEM_PROMPTS = {
@@ -48,7 +48,7 @@ Respond ONLY as JSON array:
 - natural: relaxed native-speaker tone, light idioms
 - challenge: rich vocab, idioms, contractions, varied sentence length
 Preserve meaning. Keep within 110% of original length.
-Respond ONLY with the rewritten text.`,
+Respond ONLY with the rewritten text (no preamble, no JSON wrapper).`,
 } as const;
 
 // ─── Helpers ──────────────────────────────────────────────
@@ -59,6 +59,7 @@ function corsHeaders(origin: string | null): Record<string, string> {
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-User-Id",
     "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
   };
 }
 
@@ -89,6 +90,7 @@ async function callAnthropic(env: Env, body: unknown): Promise<Response> {
 }
 
 async function callGemini(env: Env, prompt: string): Promise<{ text: string; ok: boolean }> {
+  if (!env.GEMINI_API_KEY) return { text: "", ok: false };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${env.GEMINI_API_KEY}`;
   const res = await fetch(url, {
     method: "POST",
@@ -104,14 +106,32 @@ async function callGemini(env: Env, prompt: string): Promise<{ text: string; ok:
   return { text, ok: true };
 }
 
+function json(obj: unknown, status: number, origin: string | null, extra: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json", ...corsHeaders(origin), ...extra },
+  });
+}
+
+function validateInput<T>(value: unknown, validator: (v: any) => v is T, errMsg: string): T | Response {
+  if (!validator(value as any)) {
+    return json({ error: "invalid_input", message: errMsg }, 400, null);
+  }
+  return value as T;
+}
+
 // ─── Route handlers ──────────────────────────────────────
 async function handleGrade(req: Request, env: Env, origin: string | null): Promise<Response> {
-  const { sentence, target } = await req.json<{ sentence: string; target?: string }>();
-  if (!sentence || sentence.length > 600) {
-    return json({ error: "invalid_input" }, 400, origin);
-  }
+  let body: any;
+  try { body = await req.json(); }
+  catch { return json({ error: "invalid_json" }, 400, origin); }
 
-  const cacheKey = "grade:" + (await sha256Hex(`${target ?? ""}|${sentence}`));
+  const sentence = String(body.sentence ?? "").trim();
+  const target = body.target ? String(body.target) : "";
+  if (!sentence) return json({ error: "missing_sentence" }, 400, origin);
+  if (sentence.length > 600) return json({ error: "sentence_too_long", limit: 600 }, 400, origin);
+
+  const cacheKey = "grade:" + (await sha256Hex(`${target}|${sentence}`));
   const cached = await env.CACHE.get(cacheKey);
   if (cached) {
     return new Response(cached, {
@@ -119,24 +139,26 @@ async function handleGrade(req: Request, env: Env, origin: string | null): Promi
     });
   }
 
-  const body = {
-    model: "claude-haiku-4-5",
+  const reqBody = {
+    model: MODEL,
     max_tokens: 250,
     system: [
       { type: "text", text: SYSTEM_PROMPTS.grade_writing, cache_control: { type: "ephemeral" } },
     ],
     messages: [
-      { role: "user", content: `Target meaning: ${target ?? "free writing"}\nUser sentence: ${sentence}` },
+      { role: "user", content: `Target meaning: ${target || "free writing"}\nUser sentence: ${sentence}` },
     ],
   };
 
-  const res = await callAnthropic(env, body);
+  const res = await callAnthropic(env, reqBody);
   if (!res.ok) {
-    // Fallback to Gemini
     const fb = await callGemini(env, `${SYSTEM_PROMPTS.grade_writing}\n\nTarget: ${target}\nSentence: ${sentence}`);
-    return new Response(fb.text || "{}", {
-      headers: { "content-type": "application/json", "x-source": "gemini", ...corsHeaders(origin) },
-    });
+    if (fb.ok) {
+      return new Response(fb.text || "{}", {
+        headers: { "content-type": "application/json", "x-source": "gemini", ...corsHeaders(origin) },
+      });
+    }
+    return json({ error: "llm_unavailable", anthropic_status: res.status }, 502, origin);
   }
 
   const data = (await res.json()) as any;
@@ -148,27 +170,32 @@ async function handleGrade(req: Request, env: Env, origin: string | null): Promi
 }
 
 async function handleRoleplay(req: Request, env: Env, origin: string | null): Promise<Response> {
-  const { messages, phrases, scene, role } = await req.json<{
-    messages: { role: "user" | "assistant"; content: string }[];
-    phrases?: string[];
-    scene?: string;
-    role?: string;
-  }>();
+  let body: any;
+  try { body = await req.json(); }
+  catch { return json({ error: "invalid_json" }, 400, origin); }
+
+  const messages = Array.isArray(body.messages) ? body.messages : null;
+  if (!messages || messages.length === 0) return json({ error: "missing_messages" }, 400, origin);
+  if (messages.length > 14) return json({ error: "too_many_turns", limit: 14 }, 400, origin);
+
+  const phrases = Array.isArray(body.phrases) ? body.phrases : [];
+  const scene = String(body.scene ?? "casual chat");
+  const role = String(body.role ?? "friendly conversation partner");
 
   const sys = SYSTEM_PROMPTS.roleplay
-    .replace("{role}", role ?? "friendly conversation partner")
-    .replace("{scene}", scene ?? "casual chat")
-    .replace("{phrases}", (phrases ?? []).join(", ") || "(none)");
+    .replace("{role}", role)
+    .replace("{scene}", scene)
+    .replace("{phrases}", phrases.join(", ") || "(none)");
 
-  const body = {
-    model: "claude-haiku-4-5",
+  const reqBody = {
+    model: MODEL,
     max_tokens: 150,
     system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
     messages,
     stream: true,
   };
 
-  const res = await callAnthropic(env, body);
+  const res = await callAnthropic(env, reqBody);
   if (!res.ok || !res.body) {
     return json({ error: "anthropic_error", status: res.status }, 502, origin);
   }
@@ -183,8 +210,13 @@ async function handleRoleplay(req: Request, env: Env, origin: string | null): Pr
 }
 
 async function handleDiaryToQuiz(req: Request, env: Env, origin: string | null): Promise<Response> {
-  const { diary } = await req.json<{ diary: string }>();
-  if (!diary || diary.length > 800) return json({ error: "invalid_input" }, 400, origin);
+  let body: any;
+  try { body = await req.json(); }
+  catch { return json({ error: "invalid_json" }, 400, origin); }
+
+  const diary = String(body.diary ?? "").trim();
+  if (!diary) return json({ error: "missing_diary" }, 400, origin);
+  if (diary.length > 800) return json({ error: "diary_too_long", limit: 800 }, 400, origin);
 
   const cacheKey = "d2q:" + (await sha256Hex(diary));
   const cached = await env.CACHE.get(cacheKey);
@@ -194,8 +226,8 @@ async function handleDiaryToQuiz(req: Request, env: Env, origin: string | null):
     });
   }
 
-  const body = {
-    model: "claude-haiku-4-5",
+  const reqBody = {
+    model: MODEL,
     max_tokens: 500,
     system: [
       { type: "text", text: SYSTEM_PROMPTS.diary_to_quiz, cache_control: { type: "ephemeral" } },
@@ -203,8 +235,8 @@ async function handleDiaryToQuiz(req: Request, env: Env, origin: string | null):
     messages: [{ role: "user", content: diary }],
   };
 
-  const res = await callAnthropic(env, body);
-  if (!res.ok) return json({ error: "anthropic_error" }, 502, origin);
+  const res = await callAnthropic(env, reqBody);
+  if (!res.ok) return json({ error: "anthropic_error", status: res.status }, 502, origin);
   const data = (await res.json()) as any;
   const text = data?.content?.[0]?.text ?? "[]";
   await env.CACHE.put(cacheKey, text, { expirationTtl: 7 * 86_400 });
@@ -214,41 +246,71 @@ async function handleDiaryToQuiz(req: Request, env: Env, origin: string | null):
 }
 
 async function handleStoryDifficulty(req: Request, env: Env, origin: string | null): Promise<Response> {
-  const { passage, level } = await req.json<{ passage: string; level: "easy" | "natural" | "challenge" }>();
-  if (!passage || passage.length > 1500) return json({ error: "invalid_input" }, 400, origin);
+  let body: any;
+  try { body = await req.json(); }
+  catch { return json({ error: "invalid_json" }, 400, origin); }
+
+  const passage = String(body.passage ?? "").trim();
+  const level = String(body.level ?? "");
+  if (!passage) return json({ error: "missing_passage" }, 400, origin);
+  if (passage.length > 1500) return json({ error: "passage_too_long", limit: 1500 }, 400, origin);
+  if (!["easy", "natural", "challenge"].includes(level)) {
+    return json({ error: "invalid_level", allowed: ["easy", "natural", "challenge"] }, 400, origin);
+  }
 
   const cacheKey = `story:${level}:` + (await sha256Hex(passage));
   const cached = await env.CACHE.get(cacheKey);
   if (cached) {
-    return new Response(JSON.stringify({ text: cached }), {
+    return new Response(JSON.stringify({ text: cached, cached: true }), {
       headers: { "content-type": "application/json", "x-cache": "hit", ...corsHeaders(origin) },
     });
   }
 
   const sys = SYSTEM_PROMPTS.story_difficulty.replace("{level}", level);
-  const body = {
-    model: "claude-haiku-4-5",
+  const reqBody = {
+    model: MODEL,
     max_tokens: 600,
     system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: passage }],
   };
 
-  const res = await callAnthropic(env, body);
-  if (!res.ok) return json({ error: "anthropic_error" }, 502, origin);
+  const res = await callAnthropic(env, reqBody);
+  if (!res.ok) return json({ error: "anthropic_error", status: res.status }, 502, origin);
   const data = (await res.json()) as any;
   const text = data?.content?.[0]?.text ?? "";
-  // 캐시 영구 (30일) — 정적 변환이라 안전
   await env.CACHE.put(cacheKey, text, { expirationTtl: 30 * 86_400 });
-  return new Response(JSON.stringify({ text }), {
+  return new Response(JSON.stringify({ text, cached: false }), {
     headers: { "content-type": "application/json", "x-cache": "miss", ...corsHeaders(origin) },
   });
 }
 
-function json(obj: unknown, status: number, origin: string | null): Response {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "content-type": "application/json", ...corsHeaders(origin) },
-  });
+// ─── /test endpoint — minimum LLM probe ──────────────────
+async function handleTest(env: Env, origin: string | null): Promise<Response> {
+  const t0 = Date.now();
+  const reqBody = {
+    model: MODEL,
+    max_tokens: 30,
+    system: [{ type: "text", text: "Respond with exactly one short English sentence." }],
+    messages: [{ role: "user", content: "Say hello." }],
+  };
+  const res = await callAnthropic(env, reqBody);
+  const dt = Date.now() - t0;
+  if (!res.ok) {
+    return json({
+      ok: false,
+      anthropic_status: res.status,
+      message: res.status === 401 ? "Invalid ANTHROPIC_API_KEY" : "Anthropic API error",
+      latency_ms: dt,
+    }, 502, origin);
+  }
+  const data = (await res.json()) as any;
+  const text = data?.content?.[0]?.text ?? "";
+  return json({
+    ok: true,
+    model: MODEL,
+    sample: text,
+    latency_ms: dt,
+  }, 200, origin);
 }
 
 // ─── Entry ──────────────────────────────────────────────
@@ -261,17 +323,29 @@ export default {
 
     const url = new URL(req.url);
 
+    // ─── Public endpoints (no rate-limit) ───
     if (url.pathname === "/health") {
-      return json({ ok: true, time: new Date().toISOString() }, 200, origin);
+      return json({ ok: true, time: new Date().toISOString(), model: MODEL }, 200, origin);
+    }
+
+    // ─── Validate API key exists ───
+    if (!env.ANTHROPIC_API_KEY) {
+      return json({
+        error: "anthropic_key_missing",
+        message: "ANTHROPIC_API_KEY not set. Run: npx wrangler secret put ANTHROPIC_API_KEY",
+      }, 500, origin);
     }
 
     const userId = req.headers.get("X-User-Id") || "anon";
     const rate = await checkAndIncrementRate(env, userId);
     if (!rate.ok) {
-      return json({ error: "daily_quota_exceeded", quota: DAILY_CALL_QUOTA }, 429, origin);
+      return json({ error: "daily_quota_exceeded", quota: DAILY_CALL_QUOTA, used: rate.calls }, 429, origin);
     }
 
     try {
+      if (url.pathname === "/test" && req.method === "GET") {
+        return await handleTest(env, origin);
+      }
       if (url.pathname === "/grade" && req.method === "POST") {
         return await handleGrade(req, env, origin);
       }
@@ -288,6 +362,6 @@ export default {
       return json({ error: "server_error", message: String(e?.message ?? e) }, 500, origin);
     }
 
-    return json({ error: "not_found" }, 404, origin);
+    return json({ error: "not_found", path: url.pathname }, 404, origin);
   },
 };
