@@ -2,6 +2,8 @@
 
 > 최종 목표: tt(출력·시나리오)와 sulsul(이해 카드·SRS·다양 퀴즈)를 합쳐, **회로 학습 모델 + 5축 맥락 항해 + Daily Story + LLM 보조**를 갖춘 짬짬이 영어 학습 PWA.
 
+> 현 구현 기준의 다음 기능개선 상세 명세는 [feature-improvement-spec.md](feature-improvement-spec.md)를 기준으로 한다.
+
 ---
 
 ## 1. 비전 한 줄

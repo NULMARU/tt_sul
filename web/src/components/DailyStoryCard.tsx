@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { STORY_BY_DAY } from "@shared/data/stories.seed";
 import { useStore } from "../lib/store";
@@ -5,8 +6,25 @@ import { pickNow } from "../lib/pocket";
 
 export function DailyStoryCard() {
   const nav = useNavigate();
-  const completed = new Set(Object.entries(useStore(s => s.lessonProgress)).filter(([, v]) => v.completed).map(([k]) => k));
-  const sug = pickNow(completed);
+  const lessonProgress = useStore(s => s.lessonProgress);
+  const srs = useStore(s => s.srs);
+  const prefs = useStore(s => s.prefs);
+  const learnerProfile = useStore(s => s.learnerProfile);
+  const storyProgress = useStore(s => s.storyProgress);
+  const recommendationFeedback = useStore(s => s.recommendationFeedback);
+  const completed = useMemo(
+    () => new Set(Object.entries(lessonProgress).filter(([, v]) => v.completed).map(([k]) => k)),
+    [lessonProgress],
+  );
+  const sug = pickNow({
+    completedLessonIds: completed,
+    lessonProgress,
+    srs,
+    storyProgress,
+    prefs,
+    learnerProfile,
+    recommendationFeedback,
+  });
   const story = sug.lesson.day ? STORY_BY_DAY[sug.lesson.day] : undefined;
   if (!story) return null;
 

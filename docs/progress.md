@@ -4,6 +4,60 @@
 
 ---
 
+## 🌙 야간 세션 #3 — 로컬 개인화 + LLM 프록시 연결 완료
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | 현재 워크스페이스를 원격 `NULMARU/tt_sul` 전체 저장소 기준으로 재정렬 | repo root |
+| 2 | 기능개선 상세 명세 작성 | [docs/feature-improvement-spec.md](feature-improvement-spec.md) |
+| 3 | Now 추천 알고리즘 점수화 | [web/src/lib/pocket.ts](../web/src/lib/pocket.ts), [web/src/components/NowCard.tsx](../web/src/components/NowCard.tsx) |
+| 4 | TTS 종료 대기 기반 전환 제어 | [web/src/lib/tts.ts](../web/src/lib/tts.ts), Lesson/Story/Review/Quiz/Memory Map |
+| 5 | Memory Map 모바일 가독성 개선 | [web/src/routes/MemoryMap.tsx](../web/src/routes/MemoryMap.tsx) |
+| 6 | 로컬 학습 패턴 수집 + LearnerProfile + Adaptive UI patch 기초 | [src/types/schema.ts](../src/types/schema.ts), [web/src/lib/adaptive-profile.ts](../web/src/lib/adaptive-profile.ts), [web/src/lib/adaptive-ui.ts](../web/src/lib/adaptive-ui.ts) |
+| 7 | Toolbelt 맞춤화 기록/되돌리기 UI | [web/src/routes/Toolbelt.tsx](../web/src/routes/Toolbelt.tsx) |
+| 8 | API 없이 동작하는 쉐도잉 녹음/비교 재생 UI | [web/src/components/ShadowingRecorder.tsx](../web/src/components/ShadowingRecorder.tsx), [web/src/lib/recorder.ts](../web/src/lib/recorder.ts) |
+| 9 | Cloudflare Worker KV 연결 + Claude secret 저장 + Worker 배포 | [server/workers/wrangler.toml](../server/workers/wrangler.toml) |
+| 10 | Worker CORS 수정: `localhost` 개발 포트 허용 | [server/workers/src/index.ts](../server/workers/src/index.ts) |
+| 11 | LLM JSON 응답 정규화: 코드펜스/캐시 hit도 앱에서 파싱 가능하게 처리 | [server/workers/src/index.ts](../server/workers/src/index.ts) |
+| 12 | Journal LLM 빈칸 퀴즈를 실제 저장하고 Review fallback에 연결 | [web/src/routes/Journal.tsx](../web/src/routes/Journal.tsx), [web/src/routes/Review.tsx](../web/src/routes/Review.tsx) |
+| 13 | Worker Wrangler 4.x 업데이트 및 취약점 0건 정리 | [server/workers/package.json](../server/workers/package.json) |
+
+### 🔗 현재 연결 정보
+
+| 항목 | 값 |
+|---|---|
+| Worker URL | `https://sulsul-llm-proxy.sulsul-plus.workers.dev` |
+| Web local env | `web/.env.local`에 `VITE_LLM_PROXY_URL` 설정됨 (git ignore 대상) |
+| 로컬 앱 | `http://localhost:5174/` |
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+- ✅ `server/workers`: `npm run typecheck` 성공
+- ✅ Worker deploy 성공: version `5549c681-3e60-4e7d-9d38-0743948f3577`
+- ✅ `/health` from `Origin: http://localhost:5174` → 200 + CORS OK
+- ✅ `/test` → 200, Claude sample `"Hello!"`
+- ✅ `/grade` → 200, 순수 JSON 응답 확인
+- ✅ `/diary-to-quiz` → 200, JSON array 응답 확인
+
+### ⚠️ 보안 메모
+
+- 세션 중 Claude API key가 터미널/채팅에 노출된 적이 있음. 이미 폐기/재발급하지 않았다면 Anthropic Console에서 해당 key를 폐기하고 새 key를 Worker secret으로 다시 넣어야 함.
+
+### 다음 작업 후보
+
+| 우선순위 | 작업 |
+|---|---|
+| P0 | 앱 `도구함 → LLM 연결`에서 헬스 체크/AI 호출 테스트를 브라우저에서 직접 확인 |
+| P1 | Roleplay UI 구현 (`/roleplay` 스트리밍 사용) |
+| P1 | Story 난이도 변환 결과를 사용자별 캐시에 더 명확히 표시 |
+| P1 | Journal derived quiz를 "다음날 due" 규칙으로 SRS에 정식 등록 |
+| P2 | GitHub Pages 배포 환경변수에 `VITE_LLM_PROXY_URL` 등록 후 실제 배포 |
+
+---
+
 ## 🌙 야간 세션 #2 — Day 15-30 스토리 + LLM 프록시 준비
 
 ### ✅ 이 세션에서 완료된 것

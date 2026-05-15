@@ -8,11 +8,11 @@ compatibility_date = "2026-05-01"
 # Then paste the IDs below.
 [[kv_namespaces]]
 binding = "CACHE"
-id = "REPLACE_WITH_KV_CACHE_ID"
+id = "505189cce5284a26aed8f368427ab6da"
 
 [[kv_namespaces]]
 binding = "RATE"
-id = "REPLACE_WITH_KV_RATE_ID"
+id = "2bed1ddb301747c6b5d1a80202785e68"
 
 # ─── Secrets (set via `npx wrangler secret put NAME`) ───
 # - ANTHROPIC_API_KEY

@@ -14,13 +14,21 @@ export function Journal() {
     if (!text.trim()) return;
     setLoading(true);
     let derivedIds: string[] | undefined;
+    let derivedQuizzes: Array<{ id: string; sentence: string; answer: string; accept?: string[] }> | undefined;
     if (llmAvailable()) {
       const quizzes = await diaryToQuiz(text);
       if (quizzes && Array.isArray(quizzes)) {
-        derivedIds = quizzes.map((_, i) => `dq-${Date.now()}-${i}`);
+        const stamp = Date.now();
+        derivedQuizzes = quizzes.map((q, i) => ({
+          id: `dq-${stamp}-${i}`,
+          sentence: q.sentence,
+          answer: q.answer,
+          accept: q.accept,
+        }));
+        derivedIds = derivedQuizzes.map(q => q.id);
       }
     }
-    add(new Date().getDate(), text, derivedIds);
+    add(new Date().getDate(), text, derivedIds, derivedQuizzes);
     setText("");
     setLoading(false);
   }
@@ -54,8 +62,8 @@ export function Journal() {
           <div key={j.id} className="rounded-xl bg-surface border border-border p-3">
             <div className="text-xs text-text-muted">{new Date(j.date).toLocaleDateString("ko-KR")}</div>
             <p className="en text-sm mt-1">{j.text}</p>
-            {j.derivedQuizIds && j.derivedQuizIds.length > 0 && (
-              <div className="text-xs text-accent-strong mt-1">📝 빈칸 퀴즈 {j.derivedQuizIds.length}개 생성됨</div>
+            {j.derivedQuizzes && j.derivedQuizzes.length > 0 && (
+              <div className="text-xs text-accent-strong mt-1">📝 빈칸 퀴즈 {j.derivedQuizzes.length}개 생성됨 · 복습에서 출제</div>
             )}
           </div>
         ))}

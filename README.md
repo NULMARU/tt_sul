@@ -16,6 +16,7 @@ npm run dev          # http://localhost:5173
 
 - [docs/wireframes.md](docs/wireframes.md) — 5축 메인 화면 와이어프레임
 - [docs/dev-spec.md](docs/dev-spec.md) — 아키텍처·결정·구현 단계
+- [docs/feature-improvement-spec.md](docs/feature-improvement-spec.md) — 현 구현 기준 기능개선 상세 명세
 - [docs/deploy-llm-proxy.md](docs/deploy-llm-proxy.md) — **LLM 프록시 배포 가이드 (30분)** ← AI 기능 켜기
 - [docs/progress.md](docs/progress.md) — 진행 로그
 

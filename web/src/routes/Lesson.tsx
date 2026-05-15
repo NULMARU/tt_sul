@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { LESSON_BY_ID } from "@shared/data/stages.seed";
@@ -6,9 +6,11 @@ import { SCENARIO_BY_ID } from "@shared/data/scenarios.seed";
 import { PHRASE_BY_ID, PHRASES } from "@shared/data/phrases.seed";
 import { generateLessonQuizzes } from "@shared/data/quiz-generator";
 import { useStore } from "../lib/store";
-import { speak } from "../lib/tts";
+import { speak, stopSpeak, waitForTtsIdle } from "../lib/tts";
 import { QuizPlayer } from "../components/QuizPlayer";
 import { gradeWriting, llmAvailable } from "../lib/llm";
+import { ShadowingRecorder } from "../components/ShadowingRecorder";
+import { activePatch } from "../lib/adaptive-ui";
 
 type Step = "intro" | "understand" | "absorb" | "read" | "produce" | "imprint" | "done";
 const STEPS: Step[] = ["understand", "absorb", "read", "produce", "imprint"];
@@ -28,6 +30,7 @@ export function Lesson() {
   const lesson = id ? LESSON_BY_ID[id] : undefined;
   const completeLesson = useStore(s => s.completeLesson);
   const bumpStreak = useStore(s => s.bumpStreak);
+  const recordSignal = useStore(s => s.recordSignal);
   const [step, setStep] = useState<Step>("intro");
 
   if (!lesson) return <div className="px-6 py-12 text-center text-text-muted">레슨을 찾을 수 없어요.</div>;
@@ -39,7 +42,18 @@ export function Lesson() {
 
   const quizzes = useMemo(() => generateLessonQuizzes(phrases.length ? phrases : PHRASES.slice(0, 6), lesson.id), [phrases, lesson.id]);
 
-  function next() {
+  useEffect(() => {
+    if (!lesson) return;
+    recordSignal({ type: "lesson_start", lessonId: lesson.id });
+  }, [lesson?.id, recordSignal]);
+
+  useEffect(() => {
+    if (!lesson || step === "intro" || step === "done") return;
+    recordSignal({ type: "step_enter", lessonId: lesson.id, step: step as any });
+  }, [lesson?.id, recordSignal, step]);
+
+  async function next() {
+    await waitForTtsIdle();
     if (step === "intro") return setStep("understand");
     const i = STEPS.indexOf(step as any);
     if (i < 0) return;
@@ -55,7 +69,7 @@ export function Lesson() {
   return (
     <div className="min-h-[100dvh] flex flex-col">
       <header className="px-4 pt-3 pb-2 flex items-center gap-2 sticky top-0 bg-bg/95 backdrop-blur z-10">
-        <button onClick={() => nav("/")} className="w-9 h-9 rounded-full hover:bg-surface-2">✕</button>
+        <button onClick={() => { stopSpeak(); nav("/"); }} className="w-9 h-9 rounded-full hover:bg-surface-2">✕</button>
         <div className="flex-1">
           <div className="text-xs text-text-muted">{lesson.title}</div>
           <div className="font-semibold leading-tight">{lesson.subtitle}</div>
@@ -116,7 +130,10 @@ function Understand({ lesson, onDone }: { lesson: any; onDone: () => void }) {
     return null;
   }
   const card = cards[idx];
-  function nextCard() { idx < cards.length - 1 ? setIdx(idx + 1) : onDone(); }
+  async function nextCard() {
+    await waitForTtsIdle();
+    idx < cards.length - 1 ? setIdx(idx + 1) : onDone();
+  }
 
   return (
     <div className="flex-1 flex flex-col gap-4">
@@ -144,7 +161,8 @@ function Absorb({ phrases, onDone }: { phrases: any[]; onDone: () => void }) {
   if (phrases.length === 0) { onDone(); return null; }
   const p = phrases[idx];
 
-  function nextCard() {
+  async function nextCard() {
+    await waitForTtsIdle();
     if (idx < phrases.length - 1) { setIdx(idx + 1); setFlipped(false); }
     else onDone();
   }
@@ -152,8 +170,13 @@ function Absorb({ phrases, onDone }: { phrases: any[]; onDone: () => void }) {
   return (
     <div className="flex-1 flex flex-col gap-4">
       <div className="text-center text-xs text-text-muted">{idx + 1} / {phrases.length} · 탭하여 영어 확인</div>
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setFlipped(!flipped)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") setFlipped(!flipped);
+        }}
         className="rounded-2xl border-2 border-border bg-surface p-8 min-h-[200px] flex flex-col items-center justify-center text-center gap-2 active:scale-[0.99]"
       >
         {!flipped ? (
@@ -167,9 +190,12 @@ function Absorb({ phrases, onDone }: { phrases: any[]; onDone: () => void }) {
               className="mt-2 w-11 h-11 rounded-full border border-border bg-surface-2"
               aria-label="발음 듣기"
             >🔊</button>
+            <div className="w-full" onClick={(e) => e.stopPropagation()}>
+              <ShadowingRecorder text={p.en} />
+            </div>
           </>
         )}
-      </button>
+      </div>
       <div className="flex gap-2">
         <button
           onClick={() => setFlipped(false) /* mark mode */}
@@ -204,7 +230,7 @@ function Read({ lesson, onDone }: { lesson: any; onDone: () => void }) {
       <h3 className="font-semibold">오늘의 스토리</h3>
       <p className="text-sm text-text-muted">학습한 표현이 실제 글 속에서 어떻게 쓰이는지 봅니다.</p>
       <div className="flex gap-2 mt-2">
-        <button onClick={() => nav(`/story/${lesson.storyId}`)} className="rounded-xl bg-accent text-[#2A2522] px-4 py-2.5 font-medium">읽기 →</button>
+        <button onClick={async () => { await waitForTtsIdle(); nav(`/story/${lesson.storyId}`); }} className="rounded-xl bg-accent text-[#2A2522] px-4 py-2.5 font-medium">읽기 →</button>
         <button onClick={onDone} className="rounded-xl border border-border px-4 py-2.5 text-sm text-text-muted">건너뛰기</button>
       </div>
     </div>
@@ -212,6 +238,8 @@ function Read({ lesson, onDone }: { lesson: any; onDone: () => void }) {
 }
 
 function Produce({ lesson, onDone }: { lesson: any; onDone: () => void }) {
+  const patches = useStore(s => s.adaptiveUiPatches);
+  const showEarlyHint = !!activePatch(patches, "lesson", "show_hint");
   const scIds: string[] = lesson.scenarioIds ?? [];
   const [scIdx, setScIdx] = useState(0);
   const [stepIdx, setStepIdx] = useState(0);
@@ -235,7 +263,8 @@ function Produce({ lesson, onDone }: { lesson: any; onDone: () => void }) {
   const step = sc?.steps[stepIdx];
   if (!sc || !step) { onDone(); return null; }
 
-  function nextStep() {
+  async function nextStep() {
+    await waitForTtsIdle();
     setRevealed(false);
     if (stepIdx < sc!.steps.length - 1) setStepIdx(stepIdx + 1);
     else if (scIdx < scIds.length - 1) { setScIdx(scIdx + 1); setStepIdx(0); }
@@ -256,6 +285,11 @@ function Produce({ lesson, onDone }: { lesson: any; onDone: () => void }) {
       <div className="rounded-2xl bg-surface border border-border p-4">
         <div className="text-xs text-accent-strong font-semibold mb-1">{step.label}</div>
         <p className="text-sm">{step.instruction}</p>
+        {showEarlyHint && !revealed && (
+          <div className="mt-3 rounded-lg border border-accent/40 bg-accent/10 p-2 text-xs text-text-muted">
+            힌트: <span className="en text-text">{step.answer.split(" ").slice(0, 3).join(" ")}...</span>
+          </div>
+        )}
         {!revealed ? (
           <button onClick={() => setRevealed(true)} className="mt-3 w-full rounded-xl border-2 border-accent bg-accent/10 py-2.5 text-sm font-semibold">💡 정답 확인</button>
         ) : (
@@ -322,8 +356,8 @@ function Done({ lesson }: { lesson: any }) {
       <h2 className="text-2xl font-bold">{lesson.title} 완료!</h2>
       <p className="text-text-muted">틀린 문항은 복습 큐에 자동으로 추가됐어요.</p>
       <div className="flex gap-2 mt-2">
-        <button onClick={() => nav("/review")} className="rounded-xl bg-accent text-[#2A2522] px-4 py-2.5 font-medium">복습 큐로</button>
-        <button onClick={() => nav("/")} className="rounded-xl border border-border px-4 py-2.5 text-sm">홈</button>
+        <button onClick={() => { stopSpeak(); nav("/review"); }} className="rounded-xl bg-accent text-[#2A2522] px-4 py-2.5 font-medium">복습 큐로</button>
+        <button onClick={() => { stopSpeak(); nav("/"); }} className="rounded-xl border border-border px-4 py-2.5 text-sm">홈</button>
       </div>
     </div>
   );

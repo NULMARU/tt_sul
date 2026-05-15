@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { stopSpeak } from "../lib/tts";
 
 const tabs = [
   { to: "/review",     label: "1분복습", emoji: "⚡" },
@@ -17,6 +18,7 @@ export function BottomBar() {
               <NavLink
                 to={t.to}
                 end={t.to === "/"}
+                onClick={() => stopSpeak()}
                 className={({ isActive }) =>
                   `flex flex-col items-center gap-0.5 py-1.5 text-xs rounded-lg ${isActive ? "text-accent-strong font-semibold" : "text-text-muted"}`
                 }

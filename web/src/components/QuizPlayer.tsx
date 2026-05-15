@@ -9,15 +9,16 @@ export function QuizPlayer({ quiz, onDone }: { quiz: Quiz; onDone: (correct: boo
   const [done, setDone] = useState(false);
   const record = useStore(s => s.recordQuizAttempt);
 
-  function submit(a: unknown) {
+  async function submit(a: unknown) {
     if (done) return;
     setAnswer(a);
     setDone(true);
     const ok = isCorrect(quiz, a);
     record(quiz.id, quiz.lessonId, ok);
     vibrate(ok ? 15 : [30, 60, 30]);
-    if (quiz.type !== "ox") speak(extractEn(quiz));
-    setTimeout(() => onDone(ok), 1200);
+    const speech = quiz.type !== "ox" ? speak(extractEn(quiz)) : Promise.resolve();
+    await Promise.all([speech, delay(900)]);
+    onDone(ok);
   }
 
   return (
@@ -29,6 +30,10 @@ export function QuizPlayer({ quiz, onDone }: { quiz: Quiz; onDone: (correct: boo
       )}
     </div>
   );
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
 function extractEn(q: Quiz): string {

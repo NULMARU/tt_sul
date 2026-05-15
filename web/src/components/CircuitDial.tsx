@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
 import { pickNow } from "../lib/pocket";
@@ -11,8 +12,15 @@ const MODES = [
 
 export function CircuitDial() {
   const nav = useNavigate();
-  const completed = new Set(Object.entries(useStore(s => s.lessonProgress)).filter(([, v]) => v.completed).map(([k]) => k));
-  const sug = pickNow(completed);
+  const lessonProgress = useStore(s => s.lessonProgress);
+  const srs = useStore(s => s.srs);
+  const prefs = useStore(s => s.prefs);
+  const learnerProfile = useStore(s => s.learnerProfile);
+  const completed = useMemo(
+    () => new Set(Object.entries(lessonProgress).filter(([, v]) => v.completed).map(([k]) => k)),
+    [lessonProgress],
+  );
+  const sug = pickNow({ completedLessonIds: completed, lessonProgress, srs, prefs, learnerProfile });
 
   const R = 90;
 

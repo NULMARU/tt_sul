@@ -1,8 +1,16 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { get as idbGet, set as idbSet, del as idbDel } from "idb-keyval";
-import type { UserState, StoryDifficulty } from "@shared/types/schema";
+import type {
+  AdaptiveUiPatch,
+  LearningSignal,
+  LearnerProfile,
+  RecommendationFeedback,
+  StoryDifficulty,
+  UserState,
+} from "@shared/types/schema";
 import { updateAttempt, updateSRS } from "./srs";
+import { currentTimeBand } from "./time";
 
 const STORE_KEY = "sulsul-plus:user-state";
 
@@ -23,6 +31,10 @@ function emptyState(): UserState {
     journal: [],
     bookmarks: [],
     notes: {},
+    learningSignals: [],
+    learnerProfile: null,
+    recommendationFeedback: {},
+    adaptiveUiPatches: [],
     unlockedStages: ["stage-1"],
     stats: {
       streak: 0,
@@ -44,6 +56,7 @@ function emptyState(): UserState {
       darkMode: "system",
       fontSize: "md",
       unlockAllStages: false,
+      adaptiveUiLevel: "safe",
     },
   };
 }
@@ -54,9 +67,22 @@ interface StoreActions {
   completeLesson: (lessonId: string) => void;
   setStoryRead: (storyId: string, difficulty: StoryDifficulty, quizScore?: number) => void;
   bumpStreak: () => void;
+  recordSignal: (signal: Omit<LearningSignal, "id" | "at" | "timeBand"> & Partial<Pick<LearningSignal, "at" | "timeBand">>) => void;
+  recordTtsPlay: (text?: string) => void;
+  recordRecordingMade: () => void;
+  setLearnerProfile: (profile: LearnerProfile | null) => void;
+  recordRecommendationFeedback: (suggestionId: string, action: "shown" | "clicked" | "dismissed") => void;
+  upsertAdaptiveUiPatch: (patch: AdaptiveUiPatch) => void;
+  rejectAdaptiveUiPatch: (patchId: string) => void;
+  expireAdaptiveUiPatch: (patchId: string) => void;
   toggleBookmark: (id: string) => void;
   saveNote: (id: string, text: string) => void;
-  addJournal: (day: number, text: string, derivedQuizIds?: string[]) => void;
+  addJournal: (
+    day: number,
+    text: string,
+    derivedQuizIds?: string[],
+    derivedQuizzes?: UserState["journal"][number]["derivedQuizzes"],
+  ) => void;
   resetAll: () => void;
   exportJson: () => string;
   setPrefs: (partial: Partial<UserState["prefs"]>) => void;
@@ -87,6 +113,16 @@ export const useStore = create<UserState & StoreActions>()(
           quizAttempts: { ...s.quizAttempts, [quizId]: next },
           srs:          { ...s.srs, [quizId]: srsNext },
           recallSpeedMs: recall,
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "quiz_answer",
+              quizId,
+              lessonId,
+              result: correct ? "correct" : "wrong",
+              durationMs: recallMs,
+            }),
+          ],
           stats: { ...s.stats, totalQuizzesAttempted: s.stats.totalQuizzesAttempted + 1 },
         };
       }),
@@ -96,10 +132,18 @@ export const useStore = create<UserState & StoreActions>()(
           ...s.lessonProgress,
           [lessonId]: { ...(s.lessonProgress[lessonId] ?? { lastViewedCardOrder: 0 }), completed: true, completedAt: new Date().toISOString() },
         },
+        learningSignals: [
+          ...(s.learningSignals ?? []).slice(-499),
+          createSignal({ type: "lesson_complete", lessonId, result: "success" }),
+        ],
       })),
 
       setStoryRead: (storyId, difficulty, quizScore) => set(s => ({
         storyProgress: { ...s.storyProgress, [storyId]: { read: true, difficulty, quizScore, readAt: new Date().toISOString() } },
+        learningSignals: [
+          ...(s.learningSignals ?? []).slice(-499),
+          createSignal({ type: "story_read", result: "success", metadata: { storyId, difficulty, quizScore: quizScore ?? -1 } }),
+        ],
         stats: { ...s.stats, storiesRead: s.stats.storiesRead + 1 },
       })),
 
@@ -117,15 +161,80 @@ export const useStore = create<UserState & StoreActions>()(
 
       saveNote: (id, text) => set(s => ({ notes: { ...s.notes, [id]: text } })),
 
-      addJournal: (day, text, derivedQuizIds) => set(s => ({
+      addJournal: (day, text, derivedQuizIds, derivedQuizzes) => set(s => ({
         journal: [...s.journal, {
           id: `j-${Date.now()}`,
           day,
           date: new Date().toISOString(),
           text,
           derivedQuizIds,
+          derivedQuizzes,
         }],
+        learningSignals: [
+          ...(s.learningSignals ?? []).slice(-499),
+          createSignal({ type: "journal_add", result: "success", metadata: { day, derivedQuizCount: derivedQuizIds?.length ?? 0 } }),
+        ],
         stats: { ...s.stats, journalEntries: s.stats.journalEntries + 1 },
+      })),
+
+      recordSignal: (signal) => set(s => ({
+        learningSignals: [
+          ...(s.learningSignals ?? []).slice(-499),
+          createSignal(signal),
+        ],
+      })),
+
+      recordTtsPlay: (text) => set(s => ({
+        stats: { ...s.stats, ttsPlays: s.stats.ttsPlays + 1 },
+        learningSignals: [
+          ...(s.learningSignals ?? []).slice(-499),
+          createSignal({ type: "tts_play", result: "success", metadata: { length: text?.length ?? 0 } }),
+        ],
+      })),
+
+      recordRecordingMade: () => set(s => ({
+        stats: { ...s.stats, recordingsMade: s.stats.recordingsMade + 1 },
+      })),
+
+      setLearnerProfile: (profile) => set({ learnerProfile: profile }),
+
+      recordRecommendationFeedback: (suggestionId, action) => set(s => {
+        const prev = (s.recommendationFeedback ?? {})[suggestionId] ?? emptyRecommendationFeedback(suggestionId);
+        const next: RecommendationFeedback = {
+          ...prev,
+          shown: prev.shown + (action === "shown" ? 1 : 0),
+          clicked: prev.clicked + (action === "clicked" ? 1 : 0),
+          dismissed: prev.dismissed + (action === "dismissed" ? 1 : 0),
+          lastActionAt: new Date().toISOString(),
+        };
+        return {
+          recommendationFeedback: { ...(s.recommendationFeedback ?? {}), [suggestionId]: next },
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: action === "shown" ? "recommendation_shown" : action === "clicked" ? "recommendation_clicked" : "recommendation_dismissed",
+              result: action === "clicked" ? "success" : action === "dismissed" ? "skip" : undefined,
+              metadata: { suggestionId },
+            }),
+          ],
+        };
+      }),
+
+      upsertAdaptiveUiPatch: (patch) => set(s => {
+        const patches = (s.adaptiveUiPatches ?? []).filter(p => p.id !== patch.id);
+        return { adaptiveUiPatches: [...patches, patch].slice(-50) };
+      }),
+
+      rejectAdaptiveUiPatch: (patchId) => set(s => ({
+        adaptiveUiPatches: (s.adaptiveUiPatches ?? []).map(p => p.id === patchId ? { ...p, status: "rejected" } : p),
+        learningSignals: [
+          ...(s.learningSignals ?? []).slice(-499),
+          createSignal({ type: "adaptive_ui_reverted", result: "skip", metadata: { patchId } }),
+        ],
+      })),
+
+      expireAdaptiveUiPatch: (patchId) => set(s => ({
+        adaptiveUiPatches: (s.adaptiveUiPatches ?? []).map(p => p.id === patchId ? { ...p, status: "expired" } : p),
       })),
 
       resetAll: () => set(emptyState()),
@@ -143,3 +252,16 @@ export const useStore = create<UserState & StoreActions>()(
     }
   )
 );
+
+function createSignal(signal: Omit<LearningSignal, "id" | "at" | "timeBand"> & Partial<Pick<LearningSignal, "at" | "timeBand">>): LearningSignal {
+  return {
+    ...signal,
+    id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    at: signal.at ?? new Date().toISOString(),
+    timeBand: signal.timeBand ?? currentTimeBand(),
+  };
+}
+
+function emptyRecommendationFeedback(suggestionId: string): RecommendationFeedback {
+  return { suggestionId, shown: 0, clicked: 0, dismissed: 0 };
+}

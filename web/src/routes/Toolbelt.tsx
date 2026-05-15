@@ -7,6 +7,9 @@ export function Toolbelt() {
   const nav = useNavigate();
   const stats = useStore(s => s.stats);
   const prefs = useStore(s => s.prefs);
+  const learnerProfile = useStore(s => s.learnerProfile);
+  const adaptiveUiPatches = useStore(s => s.adaptiveUiPatches);
+  const rejectAdaptiveUiPatch = useStore(s => s.rejectAdaptiveUiPatch);
   const setPrefs = useStore(s => s.setPrefs);
   const exportJson = useStore(s => s.exportJson);
   const reset = useStore(s => s.resetAll);
@@ -50,6 +53,34 @@ export function Toolbelt() {
         <Field label="전체 단계 해금" inline>
           <Toggle value={prefs.unlockAllStages} onChange={() => unlockAll()} />
         </Field>
+        <Field label="맞춤형 화면">
+          <Segment value={prefs.adaptiveUiLevel ?? "safe"} options={["off","safe","suggested","experimental"]} onChange={v => setPrefs({ adaptiveUiLevel: v as any })} />
+        </Field>
+      </Card>
+
+      <Card title="학습 패턴">
+        <div className="text-xs text-text-muted leading-relaxed">
+          선호 시간대: {learnerProfile?.preferredTimeBands.join(", ") || "데이터 수집 중"} · 약점 표현 {learnerProfile?.weakPhraseIds.length ?? 0}개 · 취약 단계 {learnerProfile?.fragileModes.join(", ") || "없음"}
+        </div>
+        {adaptiveUiPatches.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div className="text-xs font-semibold text-text-muted">맞춤화 기록</div>
+            {[...adaptiveUiPatches].reverse().slice(0, 5).map(p => (
+              <div key={p.id} className="rounded-lg border border-border bg-surface-2 p-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className={p.status === "active" ? "text-success" : "text-text-muted"}>{p.status}</span>
+                  <span className="font-medium">{p.surface}</span>
+                  {p.status === "active" && (
+                    <button onClick={() => rejectAdaptiveUiPatch(p.id)} className="ml-auto underline text-text-muted">
+                      되돌리기
+                    </button>
+                  )}
+                </div>
+                <div className="mt-1 text-text-muted">{p.reason}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <LLMSection />

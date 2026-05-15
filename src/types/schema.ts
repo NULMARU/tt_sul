@@ -216,6 +216,12 @@ export interface JournalEntry {
   text: string;             // 사용자가 쓴 영어 한 문장
   phraseIds?: string[];     // 사용한 학습 표현
   derivedQuizIds?: string[]; // LLM이 만든 빈칸 퀴즈 id
+  derivedQuizzes?: {
+    id: string;
+    sentence: string;
+    answer: string;
+    accept?: string[];
+  }[];
   llmFeedback?: string;     // 채점 결과
 }
 
@@ -225,6 +231,85 @@ export interface MyPhrase {
   userEn: string;           // 본인 변형
   note?: string;
   createdAt: string;
+}
+
+export type LearningStep = "understand" | "absorb" | "read" | "produce" | "imprint";
+
+export type LearningSignalType =
+  | "lesson_start"
+  | "lesson_complete"
+  | "step_enter"
+  | "step_exit"
+  | "quiz_answer"
+  | "tts_play"
+  | "story_read"
+  | "journal_add"
+  | "recommendation_shown"
+  | "recommendation_clicked"
+  | "recommendation_dismissed"
+  | "adaptive_ui_applied"
+  | "adaptive_ui_reverted";
+
+export interface LearningSignal {
+  id: string;
+  type: LearningSignalType;
+  at: string;
+  timeBand: TimeBand;
+  lessonId?: string;
+  phraseId?: string;
+  quizId?: string;
+  step?: LearningStep;
+  result?: "success" | "skip" | "wrong" | "correct" | "abandon";
+  durationMs?: number;
+  metadata?: Record<string, string | number | boolean>;
+}
+
+export interface LearnerProfile {
+  updatedAt: string;
+  preferredTimeBands: TimeBand[];
+  weakPhraseIds: string[];
+  weakTags: string[];
+  strongTags: string[];
+  bestModes: LearningStep[];
+  fragileModes: LearningStep[];
+  averageSessionSecondsByBand: Partial<Record<TimeBand, number>>;
+  recommendationAffinity: Partial<Record<TimeBand, "quick" | "full" | "audio-only">>;
+}
+
+export interface RecommendationFeedback {
+  suggestionId: string;
+  shown: number;
+  clicked: number;
+  dismissed: number;
+  lastActionAt?: string;
+}
+
+export type AdaptiveUiLevel = "off" | "safe" | "suggested" | "experimental";
+
+export interface AdaptiveUiPatch {
+  id: string;
+  createdAt: string;
+  source: "local" | "llm";
+  status: "candidate" | "active" | "rejected" | "expired";
+  surface: "home" | "lesson" | "review" | "story" | "memory-map" | "toolbelt";
+  changeType:
+    | "reorder_sections"
+    | "change_default_mode"
+    | "adjust_density"
+    | "show_hint"
+    | "hide_optional_section"
+    | "change_cta_priority"
+    | "change_default_filter";
+  reason: string;
+  evidence: {
+    signals: number;
+    windowDays: number;
+    metric: string;
+    before?: number;
+    afterTarget?: number;
+  };
+  payload: Record<string, string | number | boolean | string[]>;
+  expiresAt?: string;
 }
 
 export interface UserState {
@@ -246,6 +331,10 @@ export interface UserState {
   journal: JournalEntry[];
   bookmarks: string[];      // phraseId 또는 cardId
   notes: Record<string, string>;
+  learningSignals: LearningSignal[];
+  learnerProfile: LearnerProfile | null;
+  recommendationFeedback: Record<string, RecommendationFeedback>;
+  adaptiveUiPatches: AdaptiveUiPatch[];
   unlockedStages: StageId[];
   stats: {
     streak: number;
@@ -271,6 +360,7 @@ export interface UserState {
     darkMode: "system" | "light" | "dark";
     fontSize: "sm" | "md" | "lg";
     unlockAllStages: boolean;
+    adaptiveUiLevel: AdaptiveUiLevel;
   };
 }
 

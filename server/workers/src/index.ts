@@ -14,6 +14,8 @@ export interface Env {
 const ALLOWED_ORIGINS = [
   "https://nulmaru.github.io",
   "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5175",
   "http://localhost:4173",
 ];
 
@@ -53,7 +55,7 @@ Respond ONLY with the rewritten text (no preamble, no JSON wrapper).`,
 
 // ─── Helpers ──────────────────────────────────────────────
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allowed = origin && isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -61,6 +63,17 @@ function corsHeaders(origin: string | null): Record<string, string> {
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
+}
+
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    const url = new URL(origin);
+    const localHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    return localHost && (url.protocol === "http:" || url.protocol === "https:");
+  } catch {
+    return false;
+  }
 }
 
 async function sha256Hex(text: string): Promise<string> {
@@ -120,6 +133,23 @@ function validateInput<T>(value: unknown, validator: (v: any) => v is T, errMsg:
   return value as T;
 }
 
+function normalizeJsonText(text: string, fallback: string): string {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const starts = [trimmed.indexOf("{"), trimmed.indexOf("[")].filter(i => i >= 0);
+  const start = starts.length ? Math.min(...starts) : -1;
+  if (start < 0) return fallback;
+  const endBrace = trimmed.lastIndexOf("}");
+  const endBracket = trimmed.lastIndexOf("]");
+  const end = Math.max(endBrace, endBracket);
+  if (end < start) return fallback;
+  const candidate = trimmed.slice(start, end + 1);
+  try {
+    return JSON.stringify(JSON.parse(candidate));
+  } catch {
+    return fallback;
+  }
+}
+
 // ─── Route handlers ──────────────────────────────────────
 async function handleGrade(req: Request, env: Env, origin: string | null): Promise<Response> {
   let body: any;
@@ -134,7 +164,7 @@ async function handleGrade(req: Request, env: Env, origin: string | null): Promi
   const cacheKey = "grade:" + (await sha256Hex(`${target}|${sentence}`));
   const cached = await env.CACHE.get(cacheKey);
   if (cached) {
-    return new Response(cached, {
+    return new Response(normalizeJsonText(cached, "{}"), {
       headers: { "content-type": "application/json", "x-cache": "hit", ...corsHeaders(origin) },
     });
   }
@@ -154,7 +184,7 @@ async function handleGrade(req: Request, env: Env, origin: string | null): Promi
   if (!res.ok) {
     const fb = await callGemini(env, `${SYSTEM_PROMPTS.grade_writing}\n\nTarget: ${target}\nSentence: ${sentence}`);
     if (fb.ok) {
-      return new Response(fb.text || "{}", {
+      return new Response(normalizeJsonText(fb.text, "{}"), {
         headers: { "content-type": "application/json", "x-source": "gemini", ...corsHeaders(origin) },
       });
     }
@@ -162,7 +192,7 @@ async function handleGrade(req: Request, env: Env, origin: string | null): Promi
   }
 
   const data = (await res.json()) as any;
-  const text = data?.content?.[0]?.text ?? "{}";
+  const text = normalizeJsonText(data?.content?.[0]?.text ?? "{}", "{}");
   await env.CACHE.put(cacheKey, text, { expirationTtl: 86_400 });
   return new Response(text, {
     headers: { "content-type": "application/json", "x-cache": "miss", ...corsHeaders(origin) },
@@ -221,7 +251,7 @@ async function handleDiaryToQuiz(req: Request, env: Env, origin: string | null):
   const cacheKey = "d2q:" + (await sha256Hex(diary));
   const cached = await env.CACHE.get(cacheKey);
   if (cached) {
-    return new Response(cached, {
+    return new Response(normalizeJsonText(cached, "[]"), {
       headers: { "content-type": "application/json", "x-cache": "hit", ...corsHeaders(origin) },
     });
   }
@@ -238,7 +268,7 @@ async function handleDiaryToQuiz(req: Request, env: Env, origin: string | null):
   const res = await callAnthropic(env, reqBody);
   if (!res.ok) return json({ error: "anthropic_error", status: res.status }, 502, origin);
   const data = (await res.json()) as any;
-  const text = data?.content?.[0]?.text ?? "[]";
+  const text = normalizeJsonText(data?.content?.[0]?.text ?? "[]", "[]");
   await env.CACHE.put(cacheKey, text, { expirationTtl: 7 * 86_400 });
   return new Response(text, {
     headers: { "content-type": "application/json", ...corsHeaders(origin) },

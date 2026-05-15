@@ -4,7 +4,7 @@ import { STORY_BY_ID, STORIES } from "@shared/data/stories.seed";
 import { PHRASE_BY_ID } from "@shared/data/phrases.seed";
 import { PLACE_META, SITUATION_META } from "@shared/data/taxonomy";
 import { useStore } from "../lib/store";
-import { speak, vibrate } from "../lib/tts";
+import { speak, stopSpeak, vibrate, waitForTtsIdle } from "../lib/tts";
 import { rewriteStory, llmAvailable } from "../lib/llm";
 import type { StoryDifficulty } from "@shared/types/schema";
 
@@ -33,6 +33,7 @@ export function Story() {
   const [generated, setGenerated] = useState<Partial<Record<StoryDifficulty, string>>>({});
   const [loading, setLoading] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [reading, setReading] = useState(false);
 
   if (!story) return <div className="px-6 py-12 text-center text-text-muted">스토리를 찾을 수 없어요.</div>;
 
@@ -59,7 +60,7 @@ export function Story() {
   return (
     <div className="px-5 pt-4 pb-4 flex flex-col gap-4">
       <header className="flex items-center gap-3">
-        <button onClick={() => nav(-1)} className="w-9 h-9 rounded-full hover:bg-surface-2">←</button>
+        <button onClick={async () => { await waitForTtsIdle(); nav(-1); }} className="w-9 h-9 rounded-full hover:bg-surface-2">←</button>
         <div className="text-xs text-text-muted">
           Day {story.day} · {placeMeta.emoji} {placeMeta.ko} · {story.situations.map(s => SITUATION_META[s]?.emoji).join("")}
         </div>
@@ -90,8 +91,33 @@ export function Story() {
         {body && <HighlightedBody text={body} phraseIds={story.phraseIds} />}
         {body && (
           <div className="mt-4 flex gap-2">
-            <button onClick={() => speak(body, { rate: 1 })} className="rounded-xl border border-border px-3 py-2 text-sm">🔊 듣기</button>
-            <button onClick={() => speak(body, { rate: 0.85 })} className="rounded-xl border border-border px-3 py-2 text-sm">🐢 천천히</button>
+            <button
+              onClick={async () => {
+                setReading(true);
+                await speak(body, { rate: 1 });
+                setReading(false);
+              }}
+              disabled={reading}
+              className="rounded-xl border border-border px-3 py-2 text-sm disabled:opacity-50"
+            >
+              {reading ? "읽는 중..." : "🔊 듣기"}
+            </button>
+            <button
+              onClick={async () => {
+                setReading(true);
+                await speak(body, { rate: 0.85 });
+                setReading(false);
+              }}
+              disabled={reading}
+              className="rounded-xl border border-border px-3 py-2 text-sm disabled:opacity-50"
+            >
+              천천히
+            </button>
+            {reading && (
+              <button onClick={() => { stopSpeak(); setReading(false); }} className="rounded-xl border border-border px-3 py-2 text-sm text-text-muted">
+                정지
+              </button>
+            )}
           </div>
         )}
       </article>
@@ -116,12 +142,12 @@ export function Story() {
 
       {/* 이해 퀴즈 */}
       {story.comprehension && body && (
-        <button onClick={() => { setShowQuiz(true); vibrate(15); }} className="rounded-xl bg-accent text-[#2A2522] px-4 py-3 font-medium">
+        <button onClick={async () => { await waitForTtsIdle(); setShowQuiz(true); vibrate(15); }} className="rounded-xl bg-accent text-[#2A2522] px-4 py-3 font-medium">
           이해 퀴즈 3문항 ▶
         </button>
       )}
       {showQuiz && story.comprehension && (
-        <ComprehensionQuiz quiz={story.comprehension} onDone={() => nav(-1)} />
+        <ComprehensionQuiz quiz={story.comprehension} onDone={async () => { await waitForTtsIdle(); nav(-1); }} />
       )}
     </div>
   );
