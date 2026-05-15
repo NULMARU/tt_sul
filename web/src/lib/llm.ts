@@ -1,6 +1,7 @@
 /**
  * LLM 클라이언트 — Cloudflare Workers 프록시 호출.
  * VITE_LLM_PROXY_URL 미설정 시 LLM 기능은 비활성화(폴백 로컬 응답).
+ * GitHub Pages 배포에서는 repository variable LLM_PROXY_URL이 이 값으로 주입된다.
  */
 const PROXY = import.meta.env.VITE_LLM_PROXY_URL?.replace(/\/$/, "") ?? "";
 
