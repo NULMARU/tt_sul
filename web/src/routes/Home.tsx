@@ -4,6 +4,7 @@ import { CircuitDial } from "../components/CircuitDial";
 import { DailyStoryCard } from "../components/DailyStoryCard";
 import { AxisChips } from "../components/AxisChips";
 import { bandLabel, currentTimeBand } from "../lib/time";
+import { APP_VERSION } from "../lib/version";
 
 export function Home() {
   const stats = useStore(s => s.stats);
@@ -18,7 +19,7 @@ export function Home() {
       <header className="flex items-center justify-between">
         <div>
           <div className="text-sm text-text-muted">{bandLabel(band)} · 환영합니다</div>
-          <div className="text-2xl font-bold mt-0.5">Sulsul+</div>
+          <div className="text-2xl font-bold mt-0.5">Sulsul+ <span className="text-xs align-middle text-text-muted">v{APP_VERSION}</span></div>
         </div>
         <div className="text-right">
           <div className="flex items-center gap-1.5 text-sm bg-accent/15 border border-accent/40 rounded-full px-2.5 py-1">

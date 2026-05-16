@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
-import { llmAvailable, llmProxyUrl, probeHealth, probeTest, type HealthResult } from "../lib/llm";
+import { llmAvailable, llmProxyUrl, probeHealth, probeTest, suggestContentUpdate, type HealthResult } from "../lib/llm";
+import { analyzeContent, buildLlmContentSuggestion, buildLocalContentSuggestion, contentLabPayload } from "../lib/content-lab";
+import { APP_VERSION } from "../lib/version";
+import { PHRASE_BY_ID } from "@shared/data/phrases.seed";
+import type { ContentSuggestion } from "@shared/types/schema";
 
 export function Toolbelt() {
   const nav = useNavigate();
@@ -83,6 +87,8 @@ export function Toolbelt() {
         )}
       </Card>
 
+      <ContentLabSection />
+
       <LLMSection />
 
 
@@ -97,8 +103,136 @@ export function Toolbelt() {
           🔥 스트릭 {stats.streak}일 · 카드 {stats.totalCardsViewed} · 퀴즈 {stats.totalQuizzesAttempted}회 · 학습 시간 {Math.floor(stats.totalStudySeconds / 60)}분 · TTS {stats.ttsPlays} · 스토리 {stats.storiesRead}
         </div>
       </Card>
+
+      <Card title="앱 정보">
+        <div className="text-xs text-text-muted leading-relaxed">
+          Sulsul+ v{APP_VERSION} · GitHub Pages/PWA 빌드
+        </div>
+      </Card>
     </div>
   );
+}
+
+function ContentLabSection() {
+  const srs = useStore(s => s.srs);
+  const quizAttempts = useStore(s => s.quizAttempts);
+  const learnerProfile = useStore(s => s.learnerProfile);
+  const customContentPhrases = useStore(s => s.customContentPhrases ?? []);
+  const contentSuggestions = useStore(s => s.contentSuggestions ?? []);
+  const upsertContentSuggestion = useStore(s => s.upsertContentSuggestion);
+  const acceptContentSuggestion = useStore(s => s.acceptContentSuggestion);
+  const rejectContentSuggestion = useStore(s => s.rejectContentSuggestion);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const input = { srs, quizAttempts, learnerProfile, customContentPhrases };
+  const stats = analyzeContent(input);
+  const latest = [...contentSuggestions].reverse().slice(0, 3);
+
+  async function generateSuggestion() {
+    setBusy(true);
+    setMessage("");
+    const draft = llmAvailable() ? await suggestContentUpdate(contentLabPayload(input)) : null;
+    const suggestion = draft
+      ? buildLlmContentSuggestion(input, draft)
+      : buildLocalContentSuggestion(input);
+    upsertContentSuggestion(suggestion);
+    setMessage(draft ? "AI가 학습 기록 기반 후보를 만들었습니다." : "로컬 규칙 기반 후보를 만들었습니다.");
+    setBusy(false);
+  }
+
+  return (
+    <Card title="콘텐츠 자동 보강">
+      <div className="text-xs text-text-muted leading-relaxed">
+        충분히 익힌 표현은 노출을 줄일 후보로 표시하고, 부족한 부분에는 새 생활 표현을 제안합니다. 승인 전에는 학습 데이터가 바뀌지 않습니다.
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        <MiniStat label="마스터 후보" value={stats.masteredPhraseIds.length} />
+        <MiniStat label="보강 필요" value={stats.weakPhraseIds.length} />
+        <MiniStat label="추가 표현" value={customContentPhrases.length} />
+      </div>
+      <button
+        onClick={generateSuggestion}
+        disabled={busy}
+        className="rounded-xl bg-accent text-[#2A2522] px-4 py-2.5 text-sm font-medium disabled:opacity-50"
+      >
+        {busy ? "분석 중…" : llmAvailable() ? "AI로 보강 후보 만들기" : "보강 후보 만들기"}
+      </button>
+      {message && <div className="text-xs text-success">{message}</div>}
+      {latest.length === 0 && (
+        <div className="text-xs text-text-muted rounded-xl border border-border bg-surface-2 p-3">
+          아직 콘텐츠 후보가 없습니다. 위 버튼을 누르면 검토 가능한 보강팩이 생성됩니다.
+        </div>
+      )}
+      {latest.map(suggestion => (
+        <SuggestionCard
+          key={suggestion.id}
+          suggestion={suggestion}
+          onAccept={() => acceptContentSuggestion(suggestion.id)}
+          onReject={() => rejectContentSuggestion(suggestion.id)}
+        />
+      ))}
+    </Card>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-border bg-surface-2 px-2 py-2">
+      <div className="text-lg font-bold">{value}</div>
+      <div className="text-[11px] text-text-muted">{label}</div>
+    </div>
+  );
+}
+
+function SuggestionCard({ suggestion, onAccept, onReject }: { suggestion: ContentSuggestion; onAccept: () => void; onReject: () => void }) {
+  const disabled = suggestion.status !== "candidate";
+  return (
+    <div className="rounded-xl border border-border bg-surface-2 p-3 text-xs flex flex-col gap-2">
+      <div className="flex items-start gap-2">
+        <div>
+          <div className="font-semibold text-sm">{suggestion.title}</div>
+          <div className="text-text-muted">{suggestion.source === "llm" ? "AI 제안" : "로컬 제안"} · {new Date(suggestion.createdAt).toLocaleDateString()}</div>
+        </div>
+        <span className={`ml-auto rounded-full border px-2 py-0.5 ${suggestion.status === "accepted" ? "border-success/40 text-success" : suggestion.status === "rejected" ? "border-error/40 text-error" : "border-border text-text-muted"}`}>
+          {suggestion.status === "candidate" ? "검토중" : suggestion.status === "accepted" ? "적용됨" : "보류"}
+        </span>
+      </div>
+      <div className="text-text-muted leading-relaxed">{suggestion.rationale}</div>
+      {suggestion.reinforcePhraseIds.length > 0 && (
+        <div className="text-text-muted">보강 기준: {suggestion.reinforcePhraseIds.slice(0, 3).map(phraseName).join(", ")}</div>
+      )}
+      {suggestion.retirePhraseIds.length > 0 && (
+        <div className="text-text-muted">노출 줄일 후보: {suggestion.retirePhraseIds.slice(0, 3).map(phraseName).join(", ")}</div>
+      )}
+      <div className="flex flex-col gap-1.5">
+        {suggestion.phrases.slice(0, 4).map(p => (
+          <div key={p.id} className="rounded-lg bg-surface border border-border px-2 py-2">
+            <div className="en font-semibold">{p.en}</div>
+            <div className="text-text-muted">{p.ko}</div>
+            <div className="mt-1 text-[11px] text-text-muted">{p.reason}</div>
+          </div>
+        ))}
+      </div>
+      {suggestion.story && (
+        <div className="rounded-lg bg-surface border border-border px-2 py-2">
+          <div className="font-semibold">읽기 보강: {suggestion.story.title}</div>
+          <div className="mt-1 en text-text-muted line-clamp-3">{suggestion.story.body}</div>
+        </div>
+      )}
+      <div className="flex gap-2">
+        <button disabled={disabled} onClick={onAccept} className="flex-1 rounded-lg bg-accent text-[#2A2522] px-3 py-2 font-medium disabled:opacity-40">
+          승인해서 추가
+        </button>
+        <button disabled={disabled} onClick={onReject} className="rounded-lg border border-border px-3 py-2 text-text-muted disabled:opacity-40">
+          보류
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function phraseName(id: string): string {
+  return PHRASE_BY_ID[id]?.ko ?? id;
 }
 
 function LLMSection() {

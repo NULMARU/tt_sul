@@ -60,6 +60,30 @@ export async function rewriteStory(passage: string, level: "easy" | "natural" | 
   return r?.text ?? null;
 }
 
+export interface ContentSuggestionDraft {
+  title?: string;
+  rationale?: string;
+  retirePhraseIds?: string[];
+  reinforcePhraseIds?: string[];
+  phrases?: {
+    en?: string;
+    ko?: string;
+    reason?: string;
+    exampleEn?: string;
+    exampleKo?: string;
+    tags?: string[];
+  }[];
+  story?: {
+    title?: string;
+    body?: string;
+    phraseEns?: string[];
+  };
+}
+
+export async function suggestContentUpdate(payload: unknown): Promise<ContentSuggestionDraft | null> {
+  return callProxy<ContentSuggestionDraft>("/content-suggestions", payload);
+}
+
 export function llmAvailable(): boolean { return !!PROXY; }
 export function llmProxyUrl(): string { return PROXY; }
 

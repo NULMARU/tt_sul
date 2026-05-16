@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { get as idbGet, set as idbSet, del as idbDel } from "idb-keyval";
+import { PHRASES } from "@shared/data/phrases.seed";
 import type {
   AdaptiveUiPatch,
+  ContentSuggestion,
   LearningSignal,
   LearnerProfile,
   RecommendationFeedback,
@@ -35,6 +37,8 @@ function emptyState(): UserState {
     learnerProfile: null,
     recommendationFeedback: {},
     adaptiveUiPatches: [],
+    contentSuggestions: [],
+    customContentPhrases: [],
     unlockedStages: ["stage-1"],
     stats: {
       streak: 0,
@@ -75,6 +79,9 @@ interface StoreActions {
   upsertAdaptiveUiPatch: (patch: AdaptiveUiPatch) => void;
   rejectAdaptiveUiPatch: (patchId: string) => void;
   expireAdaptiveUiPatch: (patchId: string) => void;
+  upsertContentSuggestion: (suggestion: ContentSuggestion) => void;
+  acceptContentSuggestion: (suggestionId: string) => void;
+  rejectContentSuggestion: (suggestionId: string) => void;
   toggleBookmark: (id: string) => void;
   saveNote: (id: string, text: string) => void;
   addJournal: (
@@ -237,6 +244,27 @@ export const useStore = create<UserState & StoreActions>()(
         adaptiveUiPatches: (s.adaptiveUiPatches ?? []).map(p => p.id === patchId ? { ...p, status: "expired" } : p),
       })),
 
+      upsertContentSuggestion: (suggestion) => set(s => {
+        const suggestions = (s.contentSuggestions ?? []).filter(c => c.id !== suggestion.id);
+        return { contentSuggestions: [...suggestions, suggestion].slice(-20) };
+      }),
+
+      acceptContentSuggestion: (suggestionId) => set(s => {
+        const suggestion = (s.contentSuggestions ?? []).find(c => c.id === suggestionId);
+        if (!suggestion) return {};
+        const existingIds = new Set([...PHRASES, ...(s.customContentPhrases ?? [])].map(p => p.id));
+        const existingEns = new Set([...PHRASES, ...(s.customContentPhrases ?? [])].map(p => normalizeEn(p.en)));
+        const acceptedPhrases = suggestion.phrases.filter(p => !existingIds.has(p.id) && !existingEns.has(normalizeEn(p.en)));
+        return {
+          contentSuggestions: (s.contentSuggestions ?? []).map(c => c.id === suggestionId ? { ...c, status: "accepted" } : c),
+          customContentPhrases: [...(s.customContentPhrases ?? []), ...acceptedPhrases].slice(-100),
+        };
+      }),
+
+      rejectContentSuggestion: (suggestionId) => set(s => ({
+        contentSuggestions: (s.contentSuggestions ?? []).map(c => c.id === suggestionId ? { ...c, status: "rejected" } : c),
+      })),
+
       resetAll: () => set(emptyState()),
 
       exportJson: () => JSON.stringify(get(), null, 2),
@@ -264,4 +292,8 @@ function createSignal(signal: Omit<LearningSignal, "id" | "at" | "timeBand"> & P
 
 function emptyRecommendationFeedback(suggestionId: string): RecommendationFeedback {
   return { suggestionId, shown: 0, clicked: 0, dismissed: 0 };
+}
+
+function normalizeEn(en: string): string {
+  return en.toLowerCase().replace(/[^\w\s']/g, "").replace(/\s+/g, " ").trim();
 }

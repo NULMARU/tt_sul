@@ -233,6 +233,29 @@ export interface MyPhrase {
   createdAt: string;
 }
 
+export interface ContentSuggestionPhrase extends Phrase {
+  reason: string;
+}
+
+export interface ContentSuggestionStory {
+  title: string;
+  body: string;
+  phraseEns: string[];
+}
+
+export interface ContentSuggestion {
+  id: string;
+  createdAt: string;
+  source: "local" | "llm";
+  status: "candidate" | "accepted" | "rejected";
+  title: string;
+  rationale: string;
+  retirePhraseIds: string[];
+  reinforcePhraseIds: string[];
+  phrases: ContentSuggestionPhrase[];
+  story?: ContentSuggestionStory;
+}
+
 export type LearningStep = "understand" | "absorb" | "read" | "produce" | "imprint";
 
 export type LearningSignalType =
@@ -335,6 +358,8 @@ export interface UserState {
   learnerProfile: LearnerProfile | null;
   recommendationFeedback: Record<string, RecommendationFeedback>;
   adaptiveUiPatches: AdaptiveUiPatch[];
+  contentSuggestions: ContentSuggestion[];
+  customContentPhrases: ContentSuggestionPhrase[];
   unlockedStages: StageId[];
   stats: {
     streak: number;

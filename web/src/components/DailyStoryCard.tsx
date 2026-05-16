@@ -1,32 +1,14 @@
-import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { STORY_BY_DAY } from "@shared/data/stories.seed";
 import { useStore } from "../lib/store";
-import { pickNow } from "../lib/pocket";
+import { localDateKey, storyDayForDate, todayStory } from "../lib/daily-story";
 
 export function DailyStoryCard() {
   const nav = useNavigate();
-  const lessonProgress = useStore(s => s.lessonProgress);
-  const srs = useStore(s => s.srs);
-  const prefs = useStore(s => s.prefs);
-  const learnerProfile = useStore(s => s.learnerProfile);
   const storyProgress = useStore(s => s.storyProgress);
-  const recommendationFeedback = useStore(s => s.recommendationFeedback);
-  const completed = useMemo(
-    () => new Set(Object.entries(lessonProgress).filter(([, v]) => v.completed).map(([k]) => k)),
-    [lessonProgress],
-  );
-  const sug = pickNow({
-    completedLessonIds: completed,
-    lessonProgress,
-    srs,
-    storyProgress,
-    prefs,
-    learnerProfile,
-    recommendationFeedback,
-  });
-  const story = sug.lesson.day ? STORY_BY_DAY[sug.lesson.day] : undefined;
-  if (!story) return null;
+  const story = todayStory();
+  const todayKey = localDateKey();
+  const readAt = storyProgress[story.id]?.readAt;
+  const readToday = readAt ? localDateKey(new Date(readAt)) === todayKey : false;
 
   const hasFull = !!story.body.natural;
   return (
@@ -35,7 +17,8 @@ export function DailyStoryCard() {
       onClick={() => nav(`/story/${story.id}`)}
     >
       <div className="flex items-center gap-2 text-xs text-text-muted">
-        📖 오늘의 스토리
+        📖 오늘의 스토리 · Day {storyDayForDate()}
+        {readToday && <span className="text-success">· 읽음</span>}
         {!hasFull && <span className="text-warn">· 본문 준비 중</span>}
       </div>
       <div className="mt-1 font-semibold leading-snug">"{story.title}"</div>

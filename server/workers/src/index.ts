@@ -51,6 +51,16 @@ Respond ONLY as JSON array:
 - challenge: rich vocab, idioms, contractions, varied sentence length
 Preserve meaning. Keep within 110% of original length.
 Respond ONLY with the rewritten text (no preamble, no JSON wrapper).`,
+
+  content_suggestions: `You are a curriculum editor for a Korean adult English-learning PWA.
+Create safe, original, modern everyday English learning content.
+Do not quote copyrighted articles or real news text. Do not add slang that is too niche or likely to expire quickly.
+Use the learner signals to:
+- identify expressions that can be shown less often
+- reinforce weak areas
+- suggest 3-5 practical expressions and one short original reading passage
+Respond ONLY as JSON:
+{"title":"...","rationale":"...","retirePhraseIds":["..."],"reinforcePhraseIds":["..."],"phrases":[{"en":"...","ko":"...","reason":"...","exampleEn":"...","exampleKo":"...","tags":["..."]}],"story":{"title":"...","body":"...","phraseEns":["..."]}}`,
 } as const;
 
 // ─── Helpers ──────────────────────────────────────────────
@@ -314,6 +324,53 @@ async function handleStoryDifficulty(req: Request, env: Env, origin: string | nu
   });
 }
 
+async function handleContentSuggestions(req: Request, env: Env, origin: string | null): Promise<Response> {
+  let body: any;
+  try { body = await req.json(); }
+  catch { return json({ error: "invalid_json" }, 400, origin); }
+
+  const weakPhrases = Array.isArray(body.weakPhrases) ? body.weakPhrases.slice(0, 12).map(String) : [];
+  const masteredPhrases = Array.isArray(body.masteredPhrases) ? body.masteredPhrases.slice(0, 12).map(String) : [];
+  const existingCustomPhrases = Array.isArray(body.existingCustomPhrases) ? body.existingCustomPhrases.slice(0, 20).map(String) : [];
+  const recentMistakes = Array.isArray(body.recentMistakes) ? body.recentMistakes.slice(0, 12).map(String) : [];
+
+  const payload = JSON.stringify({ weakPhrases, masteredPhrases, existingCustomPhrases, recentMistakes });
+  if (payload.length > 5000) return json({ error: "payload_too_long", limit: 5000 }, 400, origin);
+
+  const cacheKey = "content:" + (await sha256Hex(payload));
+  const cached = await env.CACHE.get(cacheKey);
+  if (cached) {
+    return new Response(normalizeJsonText(cached, "{}"), {
+      headers: { "content-type": "application/json", "x-cache": "hit", ...corsHeaders(origin) },
+    });
+  }
+
+  const reqBody = {
+    model: MODEL,
+    max_tokens: 900,
+    system: [{ type: "text", text: SYSTEM_PROMPTS.content_suggestions, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: payload }],
+  };
+
+  const res = await callAnthropic(env, reqBody);
+  if (!res.ok) {
+    const fb = await callGemini(env, `${SYSTEM_PROMPTS.content_suggestions}\n\nLearner signals JSON:\n${payload}`);
+    if (fb.ok) {
+      return new Response(normalizeJsonText(fb.text, "{}"), {
+        headers: { "content-type": "application/json", "x-source": "gemini", ...corsHeaders(origin) },
+      });
+    }
+    return json({ error: "llm_unavailable", anthropic_status: res.status }, 502, origin);
+  }
+
+  const data = (await res.json()) as any;
+  const text = normalizeJsonText(data?.content?.[0]?.text ?? "{}", "{}");
+  await env.CACHE.put(cacheKey, text, { expirationTtl: 7 * 86_400 });
+  return new Response(text, {
+    headers: { "content-type": "application/json", "x-cache": "miss", ...corsHeaders(origin) },
+  });
+}
+
 // ─── /test endpoint — minimum LLM probe ──────────────────
 async function handleTest(env: Env, origin: string | null): Promise<Response> {
   const t0 = Date.now();
@@ -387,6 +444,9 @@ export default {
       }
       if (url.pathname === "/story-difficulty" && req.method === "POST") {
         return await handleStoryDifficulty(req, env, origin);
+      }
+      if (url.pathname === "/content-suggestions" && req.method === "POST") {
+        return await handleContentSuggestions(req, env, origin);
       }
     } catch (e: any) {
       return json({ error: "server_error", message: String(e?.message ?? e) }, 500, origin);

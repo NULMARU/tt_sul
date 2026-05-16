@@ -16,6 +16,7 @@ export function Review() {
   const attempts = useStore(s => s.quizAttempts);
   const srs = useStore(s => s.srs);
   const journal = useStore(s => s.journal);
+  const customContentPhrases = useStore(s => s.customContentPhrases ?? []);
   const limit = Math.min(30, Number(params.get("n") ?? "5") || 5);
   const wrongOnly = params.get("wrong") === "1";
   const practiceMode = params.get("practice") === "1";
@@ -24,7 +25,10 @@ export function Review() {
   // 사용자가 푼 적 있는 퀴즈 ID
   const dueIds = useMemo(() => buildReviewQueue(attempts, { n: limit, wrongOnly }), [attempts, limit, wrongOnly]);
 
-  const lessonQuizBank = useMemo(() => LESSONS.flatMap(buildLessonQuizBank), []);
+  const lessonQuizBank = useMemo(() => [
+    ...LESSONS.flatMap(buildLessonQuizBank),
+    ...generateLessonQuizzes(customContentPhrases, "content-lab"),
+  ], [customContentPhrases]);
   const journalQuizzes = useMemo<QuizFill[]>(() =>
     [...journal].reverse().flatMap(j =>
       (j.derivedQuizzes ?? []).map(q => ({
@@ -49,7 +53,7 @@ export function Review() {
     if (dueQuizzes.length > 0) return dueQuizzes.slice(0, limit);
     if (journalQuizzes.length > 0 && !wrongOnly && !practiceMode) return journalQuizzes.slice(0, limit);
     if (!practiceMode) return [];
-    if (source === "weak") return buildWeakPracticeQuizzes(srs, limit);
+    if (source === "weak") return buildWeakPracticeQuizzes(srs, limit, customContentPhrases);
 
     const first = LESSONS[0];
     const phrases = lessonPhrases(first);
@@ -150,8 +154,8 @@ function lessonPhrases(lesson: Lesson) {
     .filter(Boolean);
 }
 
-function buildWeakPracticeQuizzes(srs: ReturnType<typeof useStore.getState>["srs"], limit: number): Quiz[] {
-  const phrases = [...PHRASES]
+function buildWeakPracticeQuizzes(srs: ReturnType<typeof useStore.getState>["srs"], limit: number, customPhrases = [] as typeof PHRASES): Quiz[] {
+  const phrases = [...PHRASES, ...customPhrases]
     .sort((a, b) => memoryStrength(srs[`q-mc-${a.id}`]) - memoryStrength(srs[`q-mc-${b.id}`]))
     .slice(0, Math.max(8, limit));
   return generateLessonQuizzes(phrases, "memory-map").slice(0, limit);

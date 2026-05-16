@@ -9,12 +9,14 @@ export function MemoryMap() {
   const nav = useNavigate();
   const srs = useStore(s => s.srs);
   const patches = useStore(s => s.adaptiveUiPatches);
+  const customContentPhrases = useStore(s => s.customContentPhrases ?? []);
   const weakFirst = !!activePatch(patches, "memory-map", "change_default_filter");
-  const phrases = weakFirst ? [...PHRASES].sort((a, b) => {
+  const allPhrases = [...PHRASES, ...customContentPhrases];
+  const phrases = weakFirst ? [...allPhrases].sort((a, b) => {
     const sa = memoryStrength(srs[`q-mc-${a.id}`]);
     const sb = memoryStrength(srs[`q-mc-${b.id}`]);
     return sa - sb;
-  }) : PHRASES;
+  }) : allPhrases;
 
   return (
     <div className="px-5 pt-6 pb-4 flex flex-col gap-3">
@@ -27,6 +29,7 @@ export function MemoryMap() {
       </p>
       <div className="rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-text-muted leading-relaxed">
         <b className="text-text">복습 필요</b>는 아직 맞힌 기록이 없거나 기억 강도가 낮은 표현이에요. 맞힌 기록이 쌓이면 <b className="text-text">익숙해짐</b>, <b className="text-text">기억 선명</b>으로 바뀝니다.
+        {customContentPhrases.length > 0 && <div className="mt-1">승인한 보강 표현 {customContentPhrases.length}개도 함께 표시됩니다.</div>}
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">

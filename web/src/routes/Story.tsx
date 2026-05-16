@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { STORY_BY_ID, STORIES } from "@shared/data/stories.seed";
+import { STORY_BY_ID } from "@shared/data/stories.seed";
 import { PHRASE_BY_ID } from "@shared/data/phrases.seed";
 import { PLACE_META, SITUATION_META } from "@shared/data/taxonomy";
 import { useStore } from "../lib/store";
 import { speak, stopSpeak, vibrate, waitForTtsIdle } from "../lib/tts";
 import { rewriteStory, llmAvailable } from "../lib/llm";
+import { todayStory } from "../lib/daily-story";
 import type { StoryDifficulty } from "@shared/types/schema";
 
 const DIFFS: StoryDifficulty[] = ["easy", "natural", "challenge"];
@@ -23,8 +24,7 @@ export function Story() {
   const story = useMemo(() => {
     if (!id) return undefined;
     if (id === "today") {
-      const today = new Date().getDate() % 30 || 1;
-      return STORIES.find(s => s.day === today) ?? STORIES[0];
+      return todayStory();
     }
     return STORY_BY_ID[id];
   }, [id]);
