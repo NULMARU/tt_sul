@@ -45,6 +45,14 @@ Keep the rest of the sentence intact.
 Respond ONLY as JSON array:
 [{"sentence":"...","blank":"___","answer":"...","accept":["...","..."]}]`,
 
+  translate_ko: `Translate the Korean note into natural English for a Korean adult learner's short diary.
+Requirements:
+- Keep it concise and useful for daily speaking/writing.
+- Prefer simple natural English over literal translation.
+- Preserve first-person intent when present.
+- If the Korean has multiple short ideas, produce 1-3 short English sentences.
+Respond ONLY as JSON: {"text":"..."}`,
+
   story_difficulty: `Rewrite the given English passage at the {level} difficulty:
 - easy: short sentences, common verbs, present simple
 - natural: relaxed native-speaker tone, light idioms
@@ -285,6 +293,49 @@ async function handleDiaryToQuiz(req: Request, env: Env, origin: string | null):
   });
 }
 
+async function handleTranslateKo(req: Request, env: Env, origin: string | null): Promise<Response> {
+  let body: any;
+  try { body = await req.json(); }
+  catch { return json({ error: "invalid_json" }, 400, origin); }
+
+  const text = String(body.text ?? "").trim();
+  if (!text) return json({ error: "missing_text" }, 400, origin);
+  if (text.length > 600) return json({ error: "text_too_long", limit: 600 }, 400, origin);
+
+  const cacheKey = "ko2en:" + (await sha256Hex(text));
+  const cached = await env.CACHE.get(cacheKey);
+  if (cached) {
+    return new Response(normalizeJsonText(cached, "{}"), {
+      headers: { "content-type": "application/json", "x-cache": "hit", ...corsHeaders(origin) },
+    });
+  }
+
+  const reqBody = {
+    model: MODEL,
+    max_tokens: 250,
+    system: [{ type: "text", text: SYSTEM_PROMPTS.translate_ko, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: text }],
+  };
+
+  const res = await callAnthropic(env, reqBody);
+  if (!res.ok) {
+    const fb = await callGemini(env, `${SYSTEM_PROMPTS.translate_ko}\n\nKorean note:\n${text}`);
+    if (fb.ok) {
+      return new Response(normalizeJsonText(fb.text, "{}"), {
+        headers: { "content-type": "application/json", "x-source": "gemini", ...corsHeaders(origin) },
+      });
+    }
+    return json({ error: "llm_unavailable", anthropic_status: res.status }, 502, origin);
+  }
+
+  const data = (await res.json()) as any;
+  const out = normalizeJsonText(data?.content?.[0]?.text ?? "{}", "{}");
+  await env.CACHE.put(cacheKey, out, { expirationTtl: 7 * 86_400 });
+  return new Response(out, {
+    headers: { "content-type": "application/json", "x-cache": "miss", ...corsHeaders(origin) },
+  });
+}
+
 async function handleStoryDifficulty(req: Request, env: Env, origin: string | null): Promise<Response> {
   let body: any;
   try { body = await req.json(); }
@@ -441,6 +492,9 @@ export default {
       }
       if (url.pathname === "/diary-to-quiz" && req.method === "POST") {
         return await handleDiaryToQuiz(req, env, origin);
+      }
+      if (url.pathname === "/translate-ko" && req.method === "POST") {
+        return await handleTranslateKo(req, env, origin);
       }
       if (url.pathname === "/story-difficulty" && req.method === "POST") {
         return await handleStoryDifficulty(req, env, origin);

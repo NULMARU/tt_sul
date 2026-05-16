@@ -55,6 +55,11 @@ export async function diaryToQuiz(diary: string): Promise<DerivedQuiz[] | null> 
   try { return JSON.parse(raw as string) as DerivedQuiz[]; } catch { return null; }
 }
 
+export async function translateKoreanNote(text: string): Promise<string | null> {
+  const r = await callProxy<{ text: string }>("/translate-ko", { text });
+  return r?.text ?? null;
+}
+
 export async function rewriteStory(passage: string, level: "easy" | "natural" | "challenge"): Promise<string | null> {
   const r = await callProxy<{ text: string }>("/story-difficulty", { passage, level });
   return r?.text ?? null;

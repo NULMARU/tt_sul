@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
-import { diaryToQuiz, llmAvailable } from "../lib/llm";
+import { diaryToQuiz, llmAvailable, translateKoreanNote } from "../lib/llm";
 
 type SpeechRecognitionLike = {
   lang: string;
@@ -22,6 +22,9 @@ export function Journal() {
   const add = useStore(s => s.addJournal);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [koText, setKoText] = useState("");
+  const [translating, setTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState("");
   const [listening, setListening] = useState(false);
   const [interimText, setInterimText] = useState("");
   const [speechError, setSpeechError] = useState("");
@@ -49,6 +52,24 @@ export function Journal() {
     add(new Date().getDate(), text, derivedIds, derivedQuizzes);
     setText("");
     setLoading(false);
+  }
+
+  async function addKoreanTranslation() {
+    if (!koText.trim()) return;
+    if (!llmAvailable()) {
+      setTranslateError("LLM 프록시가 설정되어야 한국어 번역을 사용할 수 있어요.");
+      return;
+    }
+    setTranslating(true);
+    setTranslateError("");
+    const translated = await translateKoreanNote(koText);
+    if (translated?.trim()) {
+      setText(prev => appendText(prev, translated.trim()));
+      setKoText("");
+    } else {
+      setTranslateError("번역하지 못했어요. 잠시 후 다시 시도해주세요.");
+    }
+    setTranslating(false);
   }
 
   function toggleDictation() {
@@ -139,11 +160,34 @@ export function Journal() {
         {speechError && <div className="text-xs text-error">{speechError}</div>}
       </div>
 
+      <div className="rounded-xl border border-border bg-surface p-3 flex flex-col gap-2">
+        <div>
+          <div className="text-sm font-semibold">한국어로 먼저 쓰기</div>
+          <div className="text-xs text-text-muted">한국어로 생각을 적고 `영어로 추가`를 누르면 아래 영어 낙서장에 번역문이 이어 붙습니다.</div>
+        </div>
+        <textarea
+          value={koText}
+          onChange={e => setKoText(e.target.value)}
+          rows={3}
+          placeholder="예: 오늘은 너무 피곤해서 커피를 두 잔 마셨다. 이 내용을 영어로 추가해보세요."
+          className="rounded-xl border-2 border-border bg-surface-2 p-3 outline-none focus:border-accent"
+        />
+        <button
+          onClick={addKoreanTranslation}
+          disabled={!koText.trim() || translating || !llmAvailable()}
+          className="rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm font-medium disabled:opacity-40"
+        >
+          {translating ? "번역 중…" : "영어로 추가"}
+        </button>
+        {!llmAvailable() && <div className="text-xs text-text-muted">LLM 프록시가 설정되면 한국어 번역을 사용할 수 있어요.</div>}
+        {translateError && <div className="text-xs text-error">{translateError}</div>}
+      </div>
+
       <textarea
         value={text}
         onChange={e => setText(e.target.value)}
         rows={4}
-        placeholder="Today I... "
+        placeholder="English scratchpad: Today I... "
         className="en rounded-xl border-2 border-border bg-surface-2 p-3 outline-none focus:border-accent"
       />
       <button onClick={save} disabled={!text.trim() || loading} className="rounded-xl bg-accent text-[#2A2522] py-2.5 font-medium disabled:opacity-40">
@@ -177,6 +221,10 @@ function speechRecognitionCtor(): SpeechRecognitionCtor | null {
 }
 
 function appendDictation(prev: string, addition: string): string {
+  return appendText(prev, addition);
+}
+
+function appendText(prev: string, addition: string): string {
   if (!prev.trim()) return addition;
   return /\s$/.test(prev) ? `${prev}${addition}` : `${prev} ${addition}`;
 }
