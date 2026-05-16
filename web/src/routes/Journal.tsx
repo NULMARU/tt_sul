@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
-import { diaryToQuiz, llmAvailable, translateKoreanNote } from "../lib/llm";
+import { diaryToQuiz, gradeWriting, llmAvailable, translateKoreanNote } from "../lib/llm";
+import type { GradeResult } from "../lib/llm";
+import type { WritingMistakeNote } from "@shared/types/schema";
 
 type SpeechRecognitionLike = {
   lang: string;
@@ -16,12 +18,26 @@ type SpeechRecognitionLike = {
 
 type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
+type CorrectionDraft = {
+  original: string;
+  corrected: string;
+  score?: number;
+  why?: string;
+  alt?: string;
+  quizSentence: string;
+  quizAnswer: string;
+  quizAccept?: string[];
+};
+
 export function Journal() {
   const nav = useNavigate();
   const journal = useStore(s => s.journal);
+  const writingMistakes = useStore(s => s.writingMistakes ?? []);
   const add = useStore(s => s.addJournal);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [pendingCorrection, setPendingCorrection] = useState<CorrectionDraft | null>(null);
   const [koText, setKoText] = useState("");
   const [translating, setTranslating] = useState(false);
   const [translateError, setTranslateError] = useState("");
@@ -31,13 +47,15 @@ export function Journal() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speechSupported = !!speechRecognitionCtor();
 
-  async function save() {
-    if (!text.trim()) return;
+  async function save(finalText?: string, writingMistake?: WritingMistakeNote) {
+    const entryText = (finalText ?? text).trim();
+    if (!entryText) return;
     setLoading(true);
+    setSaveError("");
     let derivedIds: string[] | undefined;
     let derivedQuizzes: Array<{ id: string; sentence: string; answer: string; accept?: string[] }> | undefined;
     if (llmAvailable()) {
-      const quizzes = await diaryToQuiz(text);
+      const quizzes = await diaryToQuiz(entryText);
       if (quizzes && Array.isArray(quizzes)) {
         const stamp = Date.now();
         derivedQuizzes = quizzes.map((q, i) => ({
@@ -49,9 +67,43 @@ export function Journal() {
         derivedIds = derivedQuizzes.map(q => q.id);
       }
     }
-    add(new Date().getDate(), text, derivedIds, derivedQuizzes);
+    add(new Date().getDate(), entryText, derivedIds, derivedQuizzes, writingMistake);
     setText("");
+    setPendingCorrection(null);
     setLoading(false);
+  }
+
+  async function checkAndSave() {
+    if (pendingCorrection) {
+      await save(pendingCorrection.corrected, makeWritingMistake(pendingCorrection));
+      return;
+    }
+
+    const original = text.trim();
+    if (!original) return;
+    if (!llmAvailable()) {
+      await save(original);
+      return;
+    }
+
+    setLoading(true);
+    setSaveError("");
+    const grade = await gradeWriting(original, "journal-save-v2");
+    setLoading(false);
+    if (!grade) {
+      setSaveError("문장검사를 완료하지 못해 원문 그대로 저장했어요.");
+      await save(original);
+      return;
+    }
+
+    const correction = buildCorrectionDraft(original, grade);
+    if (!correction) {
+      await save(original);
+      return;
+    }
+
+    setPendingCorrection(correction);
+    setText(formatCorrectionPreview(correction));
   }
 
   async function addKoreanTranslation() {
@@ -134,7 +186,9 @@ export function Journal() {
       </header>
 
       <p className="text-xs text-text-muted">
-        오늘 학습한 표현으로 한 문장을 영어로 써보세요. {llmAvailable() ? "AI가 다음날 빈칸 퀴즈로 변환해줍니다." : "(LLM 프록시 미설정 — 텍스트만 저장됨)"}
+        낙서장은 오늘 말하고 싶은 내용을 영어 학습자료로 바꾸는 공간입니다. 영어로 직접 쓰거나 마이크로 받아쓰고,
+        한국어 메모는 영어로 번역해 추가할 수 있어요. 저장할 때 AI가 문법과 단어를 확인하고, 틀린 문장은 오답노트와 복습 퀴즈로 자동 등록됩니다.
+        {!llmAvailable() && " (LLM 프록시 미설정 — 텍스트만 저장됨)"}
       </p>
 
       <div className="rounded-xl border border-border bg-surface p-3 flex flex-col gap-2">
@@ -185,27 +239,60 @@ export function Journal() {
 
       <textarea
         value={text}
-        onChange={e => setText(e.target.value)}
+        onChange={e => {
+          setText(e.target.value);
+          setPendingCorrection(null);
+          setSaveError("");
+        }}
         rows={4}
+        readOnly={!!pendingCorrection}
         placeholder="English scratchpad: Today I... "
-        className="en rounded-xl border-2 border-border bg-surface-2 p-3 outline-none focus:border-accent"
+        className={`en rounded-xl border-2 border-border bg-surface-2 p-3 outline-none focus:border-accent ${pendingCorrection ? "cursor-default" : ""}`}
       />
-      <button onClick={save} disabled={!text.trim() || loading} className="rounded-xl bg-accent text-[#2A2522] py-2.5 font-medium disabled:opacity-40">
-        {loading ? "처리 중…" : "저장"}
+      {pendingCorrection && (
+        <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 text-sm flex flex-col gap-2">
+          <div className="font-semibold text-accent-strong">문장검사 결과를 확인해주세요.</div>
+          <div className="text-text-muted">
+            위 영어창에 수정 전/후를 표시했어요. 체크완료 후 저장하면 수정문은 낙서장에 저장되고, 원래 오류 문장은 오답노트 퀴즈로 복습에 들어갑니다.
+          </div>
+          {pendingCorrection.why && <div className="text-text-muted">{pendingCorrection.why}</div>}
+          {pendingCorrection.alt && <div>대안 표현: <span className="en">{pendingCorrection.alt}</span></div>}
+          <button
+            onClick={() => {
+              setText(pendingCorrection.original);
+              setPendingCorrection(null);
+            }}
+            className="self-start rounded-lg border border-border bg-surface px-3 py-1.5 text-xs"
+          >
+            다시 쓰기
+          </button>
+        </div>
+      )}
+      {saveError && <div className="text-xs text-error">{saveError}</div>}
+      <button onClick={checkAndSave} disabled={!text.trim() || loading} className="rounded-xl bg-accent text-[#2A2522] py-2.5 font-medium disabled:opacity-40">
+        {loading ? "처리 중…" : pendingCorrection ? "체크완료 후 저장" : llmAvailable() ? "문장검사 후 저장" : "저장"}
       </button>
 
       <section className="flex flex-col gap-2 mt-2">
         <h2 className="text-sm text-text-muted">이전 기록</h2>
         {journal.length === 0 && <p className="text-text-muted text-sm">아직 기록이 없어요.</p>}
-        {[...journal].reverse().map(j => (
-          <div key={j.id} className="rounded-xl bg-surface border border-border p-3">
-            <div className="text-xs text-text-muted">{new Date(j.date).toLocaleDateString("ko-KR")}</div>
-            <p className="en text-sm mt-1">{j.text}</p>
-            {j.derivedQuizzes && j.derivedQuizzes.length > 0 && (
-              <div className="text-xs text-accent-strong mt-1">📝 빈칸 퀴즈 {j.derivedQuizzes.length}개 생성됨 · 복습에서 출제</div>
-            )}
-          </div>
-        ))}
+        {[...journal].reverse().map(j => {
+          const mistake = j.writingMistakeId ? writingMistakes.find(m => m.id === j.writingMistakeId) : undefined;
+          return (
+            <div key={j.id} className="rounded-xl bg-surface border border-border p-3">
+              <div className="text-xs text-text-muted">{new Date(j.date).toLocaleDateString("ko-KR")}</div>
+              <p className="en text-sm mt-1">{j.text}</p>
+              {j.derivedQuizzes && j.derivedQuizzes.length > 0 && (
+                <div className="text-xs text-accent-strong mt-1">📝 빈칸 퀴즈 {j.derivedQuizzes.length}개 생성됨 · 복습에서 출제</div>
+              )}
+              {mistake && (
+                <div className="text-xs mt-1 text-text-muted">
+                  오답노트: {mistake.status === "completed" ? "학습완료" : "복습 대기"} · <span className="en">{mistake.original}</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </section>
     </div>
   );
@@ -227,4 +314,65 @@ function appendDictation(prev: string, addition: string): string {
 function appendText(prev: string, addition: string): string {
   if (!prev.trim()) return addition;
   return /\s$/.test(prev) ? `${prev}${addition}` : `${prev} ${addition}`;
+}
+
+function buildCorrectionDraft(original: string, grade: GradeResult): CorrectionDraft | null {
+  const corrected = cleanCorrection(grade.corrected ?? grade.fix ?? "");
+  if (!corrected || isNoChangeText(corrected)) return null;
+  const changed = normalizeEnglish(original) !== normalizeEnglish(corrected);
+  const hasIssue = grade.hasIssue ?? (changed && (grade.score ?? 10) < 9.5);
+  if (!hasIssue || !changed) return null;
+
+  const quizAnswer = cleanCorrection(grade.quizAnswer ?? "") || corrected;
+  const quizSentence = ensureQuizSentence(grade.quizSentence, original, corrected, quizAnswer);
+  return {
+    original,
+    corrected,
+    score: grade.score,
+    why: grade.why,
+    alt: cleanCorrection(grade.alt ?? ""),
+    quizSentence,
+    quizAnswer,
+    quizAccept: [],
+  };
+}
+
+function makeWritingMistake(correction: CorrectionDraft): WritingMistakeNote {
+  const stamp = Date.now();
+  return {
+    id: `wm-${stamp}`,
+    createdAt: new Date().toISOString(),
+    original: correction.original,
+    corrected: correction.corrected,
+    explanation: correction.why,
+    score: correction.score,
+    quizId: `wmq-${stamp}`,
+    quizSentence: correction.quizSentence,
+    quizAnswer: correction.quizAnswer,
+    quizAccept: correction.quizAccept,
+    status: "learning",
+  };
+}
+
+function formatCorrectionPreview(correction: CorrectionDraft): string {
+  return `Before:\n${correction.original}\n\nAfter:\n${correction.corrected}`;
+}
+
+function ensureQuizSentence(candidate: string | undefined, original: string, corrected: string, answer: string): string {
+  const clean = cleanCorrection(candidate ?? "");
+  if (clean.includes("___")) return clean;
+  if (answer && corrected.includes(answer)) return corrected.replace(answer, "___");
+  return `Correct this sentence:\n${original}\n\n___`;
+}
+
+function cleanCorrection(value: string): string {
+  return value.trim().replace(/^["']|["']$/g, "");
+}
+
+function normalizeEnglish(value: string): string {
+  return value.toLowerCase().replace(/[“”]/g, "\"").replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim();
+}
+
+function isNoChangeText(value: string): boolean {
+  return /^(no change|no correction|looks good|correct as is|same as original)/i.test(value.trim());
 }

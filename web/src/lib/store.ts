@@ -31,6 +31,7 @@ function emptyState(): UserState {
     storyProgress: {},
     myPhrases: [],
     journal: [],
+    writingMistakes: [],
     bookmarks: [],
     notes: {},
     learningSignals: [],
@@ -89,6 +90,7 @@ interface StoreActions {
     text: string,
     derivedQuizIds?: string[],
     derivedQuizzes?: UserState["journal"][number]["derivedQuizzes"],
+    writingMistake?: UserState["writingMistakes"][number],
   ) => void;
   resetAll: () => void;
   exportJson: () => string;
@@ -113,13 +115,26 @@ export const useStore = create<UserState & StoreActions>()(
       }),
 
       recordQuizAttempt: (quizId, lessonId, correct, recallMs) => set(s => {
+        const writingMistake = (s.writingMistakes ?? []).find(m => m.quizId === quizId);
         const next = updateAttempt(s.quizAttempts[quizId], quizId, lessonId, correct);
         const srsNext = updateSRS(s.srs[quizId], correct);
+        const completedMistake = !!writingMistake && correct;
+        const finalAttempt = completedMistake
+          ? { ...next, consecutiveCorrect: Math.max(next.consecutiveCorrect, 5), nextReviewAt: farFutureDate() }
+          : next;
+        const finalSrs = completedMistake
+          ? { ...srsNext, consecutiveCorrect: Math.max(srsNext.consecutiveCorrect, 5), nextReviewAt: farFutureDate(), lastResult: "correct" as const }
+          : srsNext;
         const recall = recallMs ? { ...s.recallSpeedMs, [quizId]: [...(s.recallSpeedMs[quizId] ?? []).slice(-9), recallMs] } : s.recallSpeedMs;
         return {
-          quizAttempts: { ...s.quizAttempts, [quizId]: next },
-          srs:          { ...s.srs, [quizId]: srsNext },
+          quizAttempts: { ...s.quizAttempts, [quizId]: finalAttempt },
+          srs:          { ...s.srs, [quizId]: finalSrs },
           recallSpeedMs: recall,
+          writingMistakes: (s.writingMistakes ?? []).map(m =>
+            completedMistake && m.quizId === quizId
+              ? { ...m, status: "completed" as const, completedAt: new Date().toISOString() }
+              : m,
+          ),
           learningSignals: [
             ...(s.learningSignals ?? []).slice(-499),
             createSignal({
@@ -168,21 +183,55 @@ export const useStore = create<UserState & StoreActions>()(
 
       saveNote: (id, text) => set(s => ({ notes: { ...s.notes, [id]: text } })),
 
-      addJournal: (day, text, derivedQuizIds, derivedQuizzes) => set(s => ({
-        journal: [...s.journal, {
-          id: `j-${Date.now()}`,
-          day,
-          date: new Date().toISOString(),
-          text,
-          derivedQuizIds,
-          derivedQuizzes,
-        }],
-        learningSignals: [
-          ...(s.learningSignals ?? []).slice(-499),
-          createSignal({ type: "journal_add", result: "success", metadata: { day, derivedQuizCount: derivedQuizIds?.length ?? 0 } }),
-        ],
-        stats: { ...s.stats, journalEntries: s.stats.journalEntries + 1 },
-      })),
+      addJournal: (day, text, derivedQuizIds, derivedQuizzes, writingMistake) => set(s => {
+        const now = new Date().toISOString();
+        const journalId = `j-${Date.now()}`;
+        const mistake = writingMistake ? { ...writingMistake, sourceJournalId: journalId } : undefined;
+        const seededAttempt = mistake ? {
+          quizId: mistake.quizId,
+          lessonId: "writing-mistake",
+          consecutiveCorrect: 0,
+          nextReviewAt: now,
+          totalCorrect: 0,
+          totalWrong: 1,
+          lastAttemptAt: now,
+        } : undefined;
+        const seededSrs = mistake ? {
+          consecutiveCorrect: 0,
+          nextReviewAt: now,
+          lapses: 1,
+          lastResult: "wrong" as const,
+        } : undefined;
+        return {
+          journal: [...s.journal, {
+            id: journalId,
+            day,
+            date: now,
+            text,
+            derivedQuizIds,
+            derivedQuizzes,
+            writingMistakeId: mistake?.id,
+            correction: mistake ? {
+              original: mistake.original,
+              corrected: mistake.corrected,
+              why: mistake.explanation,
+              score: mistake.score,
+            } : undefined,
+          }],
+          writingMistakes: mistake ? [...(s.writingMistakes ?? []), mistake] : (s.writingMistakes ?? []),
+          quizAttempts: seededAttempt ? { ...s.quizAttempts, [seededAttempt.quizId]: seededAttempt } : s.quizAttempts,
+          srs: seededSrs ? { ...s.srs, [mistake!.quizId]: seededSrs } : s.srs,
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "journal_add",
+              result: "success",
+              metadata: { day, derivedQuizCount: derivedQuizIds?.length ?? 0, writingMistake: !!mistake },
+            }),
+          ],
+          stats: { ...s.stats, journalEntries: s.stats.journalEntries + 1 },
+        };
+      }),
 
       recordSignal: (signal) => set(s => ({
         learningSignals: [
@@ -296,4 +345,8 @@ function emptyRecommendationFeedback(suggestionId: string): RecommendationFeedba
 
 function normalizeEn(en: string): string {
   return en.toLowerCase().replace(/[^\w\s']/g, "").replace(/\s+/g, " ").trim();
+}
+
+function farFutureDate(): string {
+  return "2099-12-31T00:00:00.000Z";
 }

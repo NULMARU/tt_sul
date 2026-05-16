@@ -16,6 +16,7 @@ export function Review() {
   const attempts = useStore(s => s.quizAttempts);
   const srs = useStore(s => s.srs);
   const journal = useStore(s => s.journal);
+  const writingMistakes = useStore(s => s.writingMistakes ?? []);
   const customContentPhrases = useStore(s => s.customContentPhrases ?? []);
   const limit = Math.min(30, Number(params.get("n") ?? "5") || 5);
   const wrongOnly = params.get("wrong") === "1";
@@ -43,14 +44,30 @@ export function Review() {
       })),
     ),
   [journal]);
+  const writingMistakeQuizzes = useMemo<QuizFill[]>(() =>
+    [...writingMistakes]
+      .reverse()
+      .filter(m => m.status !== "completed")
+      .map(m => ({
+        id: m.quizId,
+        type: "fill_blank" as const,
+        lessonId: "writing-mistake",
+        prompt: m.quizSentence,
+        promptKo: `오답노트: ${m.original}`,
+        inputMode: "keyboard" as const,
+        answer: [m.quizAnswer, ...(m.quizAccept ?? [])].map(a => a.toLowerCase()),
+        explanation: `${m.corrected}${m.explanation ? ` · ${m.explanation}` : ""}`,
+      })),
+  [writingMistakes]);
 
   const dueQuizzes = useMemo(() => {
-    const byId = new Map<Quiz["id"], Quiz>([...lessonQuizBank, ...journalQuizzes].map(q => [q.id, q]));
+    const byId = new Map<Quiz["id"], Quiz>([...lessonQuizBank, ...journalQuizzes, ...writingMistakeQuizzes].map(q => [q.id, q]));
     return dueIds.map(id => byId.get(id)).filter(Boolean) as Quiz[];
-  }, [dueIds, journalQuizzes, lessonQuizBank]);
+  }, [dueIds, journalQuizzes, lessonQuizBank, writingMistakeQuizzes]);
 
   const computedQuizzes = useMemo<Quiz[]>(() => {
     if (dueQuizzes.length > 0) return dueQuizzes.slice(0, limit);
+    if (writingMistakeQuizzes.length > 0 && !wrongOnly && !practiceMode) return writingMistakeQuizzes.slice(0, limit);
     if (journalQuizzes.length > 0 && !wrongOnly && !practiceMode) return journalQuizzes.slice(0, limit);
     if (!practiceMode) return [];
     if (source === "weak") return buildWeakPracticeQuizzes(srs, limit, customContentPhrases);
@@ -58,7 +75,7 @@ export function Review() {
     const first = LESSONS[0];
     const phrases = lessonPhrases(first);
     return generateLessonQuizzes(phrases, first.id).slice(0, limit);
-  }, [dueQuizzes, journalQuizzes, limit, practiceMode, source, srs, wrongOnly]);
+  }, [dueQuizzes, journalQuizzes, limit, practiceMode, source, srs, writingMistakeQuizzes, wrongOnly]);
 
   const computedKey = computedQuizzes.map(q => q.id).join("|");
   const routeKey = `${location.key}:${limit}:${wrongOnly ? "wrong" : "all"}:${practiceMode ? "practice" : "review"}:${source}`;
@@ -66,6 +83,7 @@ export function Review() {
   const computedModeLabel =
     wrongOnly ? "오답만" :
     dueQuizzes.length > 0 ? "복습" :
+    writingMistakeQuizzes.length > 0 && !practiceMode ? "오답노트" :
     journalQuizzes.length > 0 && !practiceMode ? "일기 문제" :
     practiceMode ? "연습" :
     "복습";

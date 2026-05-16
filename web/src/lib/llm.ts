@@ -35,6 +35,11 @@ export interface GradeResult {
   fix: string;
   alt: string;
   why: string;
+  hasIssue?: boolean;
+  corrected?: string;
+  quizSentence?: string;
+  quizAnswer?: string;
+  quizAccept?: string[];
 }
 
 export async function gradeWriting(sentence: string, target?: string): Promise<GradeResult | null> {

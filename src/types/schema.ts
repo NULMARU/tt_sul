@@ -223,6 +223,29 @@ export interface JournalEntry {
     accept?: string[];
   }[];
   llmFeedback?: string;     // 채점 결과
+  writingMistakeId?: string; // 저장 중 발견된 작문 오답노트
+  correction?: {
+    original: string;
+    corrected: string;
+    why?: string;
+    score?: number;
+  };
+}
+
+export interface WritingMistakeNote {
+  id: string;
+  createdAt: string;
+  sourceJournalId?: string;
+  original: string;
+  corrected: string;
+  explanation?: string;
+  score?: number;
+  quizId: string;
+  quizSentence: string;
+  quizAnswer: string;
+  quizAccept?: string[];
+  status: "learning" | "completed";
+  completedAt?: string;
 }
 
 export interface MyPhrase {
@@ -352,6 +375,7 @@ export interface UserState {
   }>;
   myPhrases: MyPhrase[];
   journal: JournalEntry[];
+  writingMistakes: WritingMistakeNote[];
   bookmarks: string[];      // phraseId 또는 cardId
   notes: Record<string, string>;
   learningSignals: LearningSignal[];

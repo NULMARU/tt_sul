@@ -24,13 +24,21 @@ const MODEL = "claude-haiku-4-5";
 
 // ─── System prompts (cached via Anthropic prompt caching) ───
 const SYSTEM_PROMPTS = {
-  grade_writing: `You are an English coach for Korean learners.
-Grade the user's English sentence on:
-- naturalness (0-10)
-- one concrete smallest fix
-- one richer alternative phrasing
-- why (under 25 Korean words)
-Respond ONLY as JSON: {"score":number,"fix":string,"alt":string,"why":string}`,
+  grade_writing: `You are an English coach for Korean adult learners.
+Check the user's English writing for grammar, word choice, punctuation, and naturalness.
+Return a practical correction, not a long explanation.
+Rules:
+- score: 0-10 naturalness/accuracy.
+- hasIssue: true only when the writing should be corrected.
+- corrected: the full corrected English text. If there is no issue, repeat the original.
+- fix: same as corrected for backward compatibility.
+- alt: one richer natural alternative, or "".
+- why: Korean explanation under 35 words.
+- quizSentence: if hasIssue, create one fill-in-the-blank quiz from the corrected text by replacing the key corrected word/phrase with ___. If no issue, "".
+- quizAnswer: the missing corrected word/phrase. If no issue, "".
+- quizAccept: 0-2 acceptable corrected variants only. Never include the original mistaken form.
+Respond ONLY as JSON:
+{"score":number,"hasIssue":boolean,"corrected":"...","fix":"...","alt":"...","why":"...","quizSentence":"...","quizAnswer":"...","quizAccept":["..."]}`,
 
   roleplay: `You play the role of {role} in a {scene} scene.
 The user is a Korean English learner.
@@ -189,7 +197,7 @@ async function handleGrade(req: Request, env: Env, origin: string | null): Promi
 
   const reqBody = {
     model: MODEL,
-    max_tokens: 250,
+    max_tokens: 350,
     system: [
       { type: "text", text: SYSTEM_PROMPTS.grade_writing, cache_control: { type: "ephemeral" } },
     ],
