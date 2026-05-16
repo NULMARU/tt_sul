@@ -244,10 +244,10 @@ export function Journal() {
           setPendingCorrection(null);
           setSaveError("");
         }}
-        rows={4}
+        rows={pendingCorrection ? correctionPreviewRows(pendingCorrection) : 4}
         readOnly={!!pendingCorrection}
         placeholder="English scratchpad: Today I... "
-        className={`en rounded-xl border-2 border-border bg-surface-2 p-3 outline-none focus:border-accent ${pendingCorrection ? "cursor-default" : ""}`}
+        className={`en rounded-xl border-2 border-border bg-surface-2 p-3 leading-relaxed outline-none focus:border-accent ${pendingCorrection ? "cursor-default text-base" : ""}`}
       />
       {pendingCorrection && (
         <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 text-sm flex flex-col gap-2">
@@ -356,6 +356,14 @@ function makeWritingMistake(correction: CorrectionDraft): WritingMistakeNote {
 
 function formatCorrectionPreview(correction: CorrectionDraft): string {
   return `Before:\n${correction.original}\n\nAfter:\n${correction.corrected}`;
+}
+
+function correctionPreviewRows(correction: CorrectionDraft): number {
+  const preview = formatCorrectionPreview(correction);
+  const visualRows = preview
+    .split("\n")
+    .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / 34)), 0);
+  return Math.max(9, visualRows + 2);
 }
 
 function ensureQuizSentence(candidate: string | undefined, original: string, corrected: string, answer: string): string {
