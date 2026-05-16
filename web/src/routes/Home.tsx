@@ -1,4 +1,5 @@
 import { useStore } from "../lib/store";
+import { useNavigate } from "react-router-dom";
 import { NowCard } from "../components/NowCard";
 import { CircuitDial } from "../components/CircuitDial";
 import { DailyStoryCard } from "../components/DailyStoryCard";
@@ -7,6 +8,7 @@ import { bandLabel, currentTimeBand } from "../lib/time";
 import { APP_VERSION } from "../lib/version";
 
 export function Home() {
+  const nav = useNavigate();
   const stats = useStore(s => s.stats);
   const goal = useStore(s => s.prefs.dailyMinutesGoal);
   const todayMin = Math.floor(stats.totalStudySeconds / 60);
@@ -46,6 +48,19 @@ export function Home() {
 
       {/* Daily Story */}
       <DailyStoryCard />
+
+      <button
+        onClick={() => nav("/journal")}
+        className="w-full text-left rounded-2xl bg-surface border border-border p-4 active:scale-[0.99] transition-transform"
+      >
+        <div className="flex items-center gap-2 text-xs text-text-muted">
+          📓 낙서장 · 다음날 퀴즈 씨앗
+        </div>
+        <div className="mt-1 font-semibold leading-snug">짧게 쓰거나 말해서 남기기</div>
+        <div className="text-sm text-text-muted mt-0.5">
+          영어 한 문장을 저장하면 복습용 빈칸 문제로 이어집니다.
+        </div>
+      </button>
 
       {/* 5축 칩 */}
       <section className="mt-2">

@@ -36,7 +36,6 @@ export function Toolbelt() {
       </header>
 
       <Card title="추가 도구">
-        <Row label="📓 일기 (다음날 퀴즈로)"   action={() => nav("/journal")} />
         <Row label="📅 일자 트랙"             action={() => nav("/axis/day")} />
         <Row label="🪜 스테이지 트리"         action={() => nav("/axis/stage")} />
         <Row label="🗺️ 장소 지도"             action={() => nav("/axis/place")} />

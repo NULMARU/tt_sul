@@ -1,7 +1,20 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
 import { diaryToQuiz, llmAvailable } from "../lib/llm";
+
+type SpeechRecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: any) => void) | null;
+  onerror: ((event: any) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
 export function Journal() {
   const nav = useNavigate();
@@ -9,6 +22,11 @@ export function Journal() {
   const add = useStore(s => s.addJournal);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [interimText, setInterimText] = useState("");
+  const [speechError, setSpeechError] = useState("");
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const speechSupported = !!speechRecognitionCtor();
 
   async function save() {
     if (!text.trim()) return;
@@ -33,16 +51,93 @@ export function Journal() {
     setLoading(false);
   }
 
+  function toggleDictation() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      setInterimText("");
+      return;
+    }
+
+    const Ctor = speechRecognitionCtor();
+    if (!Ctor) {
+      setSpeechError("이 브라우저는 음성 받아쓰기를 지원하지 않아요. 키보드 입력을 사용해주세요.");
+      return;
+    }
+
+    const recognition = new Ctor();
+    recognitionRef.current = recognition;
+    recognition.lang = "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = event => {
+      let finalText = "";
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const transcript = event.results[i]?.[0]?.transcript ?? "";
+        if (event.results[i]?.isFinal) finalText += transcript;
+        else interim += transcript;
+      }
+      if (finalText.trim()) {
+        setText(prev => appendDictation(prev, finalText.trim()));
+        setInterimText("");
+      } else {
+        setInterimText(interim.trim());
+      }
+    };
+    recognition.onerror = event => {
+      setSpeechError(event?.error === "not-allowed" ? "마이크 권한이 필요해요." : "받아쓰기를 계속할 수 없어요. 다시 시도해주세요.");
+      setListening(false);
+    };
+    recognition.onend = () => {
+      setListening(false);
+      setInterimText("");
+    };
+
+    try {
+      setSpeechError("");
+      setInterimText("");
+      recognition.start();
+      setListening(true);
+    } catch {
+      setSpeechError("받아쓰기를 시작하지 못했어요. 잠시 후 다시 시도해주세요.");
+      setListening(false);
+    }
+  }
+
   return (
     <div className="px-5 pt-6 pb-4 flex flex-col gap-4">
       <header className="flex items-center gap-3">
         <button onClick={() => nav("/")} className="w-9 h-9 rounded-full hover:bg-surface-2">←</button>
-        <h1 className="text-xl font-bold">📓 일기</h1>
+        <h1 className="text-xl font-bold">📓 낙서장</h1>
       </header>
 
       <p className="text-xs text-text-muted">
         오늘 학습한 표현으로 한 문장을 영어로 써보세요. {llmAvailable() ? "AI가 다음날 빈칸 퀴즈로 변환해줍니다." : "(LLM 프록시 미설정 — 텍스트만 저장됨)"}
       </p>
+
+      <div className="rounded-xl border border-border bg-surface p-3 flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">영어 받아쓰기</div>
+            <div className="text-xs text-text-muted">마이크로 말하면 아래 낙서장에 자동 입력됩니다.</div>
+          </div>
+          <button
+            onClick={toggleDictation}
+            disabled={!speechSupported}
+            className={`rounded-xl px-3 py-2 text-sm font-medium disabled:opacity-40 ${listening ? "bg-error text-white" : "bg-accent text-[#2A2522]"}`}
+          >
+            {listening ? "중지" : "시작"}
+          </button>
+        </div>
+        {!speechSupported && (
+          <div className="text-xs text-text-muted">
+            현재 브라우저는 받아쓰기를 지원하지 않아요. Chrome/Safari 등 지원 브라우저에서 사용할 수 있습니다.
+          </div>
+        )}
+        {interimText && <div className="text-xs text-text-muted en">듣는 중: {interimText}</div>}
+        {speechError && <div className="text-xs text-error">{speechError}</div>}
+      </div>
 
       <textarea
         value={text}
@@ -70,4 +165,18 @@ export function Journal() {
       </section>
     </div>
   );
+}
+
+function speechRecognitionCtor(): SpeechRecognitionCtor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as Window & {
+    SpeechRecognition?: SpeechRecognitionCtor;
+    webkitSpeechRecognition?: SpeechRecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+function appendDictation(prev: string, addition: string): string {
+  if (!prev.trim()) return addition;
+  return /\s$/.test(prev) ? `${prev}${addition}` : `${prev} ${addition}`;
 }
