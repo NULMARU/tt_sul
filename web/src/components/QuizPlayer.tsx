@@ -1,12 +1,21 @@
 import { useState } from "react";
 import type { Quiz } from "@shared/types/schema";
 import { isCorrect } from "../lib/quiz-check";
-import { speak, vibrate } from "../lib/tts";
+import { speak, vibrate, waitForTtsIdle } from "../lib/tts";
 import { useStore } from "../lib/store";
 
-export function QuizPlayer({ quiz, onDone }: { quiz: Quiz; onDone: (correct: boolean) => void }) {
+export function QuizPlayer({
+  quiz,
+  onDone,
+  onAnswered,
+}: {
+  quiz: Quiz;
+  onDone: (correct: boolean) => void;
+  onAnswered?: () => void;
+}) {
   const [answer, setAnswer] = useState<unknown>(null);
   const [done, setDone] = useState(false);
+  const [submittedCorrect, setSubmittedCorrect] = useState<boolean | null>(null);
   const record = useStore(s => s.recordQuizAttempt);
 
   async function submit(a: unknown) {
@@ -14,26 +23,46 @@ export function QuizPlayer({ quiz, onDone }: { quiz: Quiz; onDone: (correct: boo
     setAnswer(a);
     setDone(true);
     const ok = isCorrect(quiz, a);
+    setSubmittedCorrect(ok);
+    onAnswered?.();
     record(quiz.id, quiz.lessonId, ok);
     vibrate(ok ? 15 : [30, 60, 30]);
-    const speech = quiz.type !== "ox" ? speak(extractEn(quiz)) : Promise.resolve();
-    await Promise.all([speech, delay(900)]);
-    onDone(ok);
+    if (quiz.type !== "ox") void speak(extractEn(quiz));
+  }
+
+  async function moveNext() {
+    if (submittedCorrect === null) return;
+    await waitForTtsIdle();
+    onDone(submittedCorrect);
   }
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-4 flex flex-col gap-4">
       {renderPrompt(quiz)}
       {renderInput(quiz, answer, done, submit)}
-      {done && !isCorrect(quiz, answer) && quiz.explanation && (
-        <div className="text-sm text-text-muted border-l-2 border-warn pl-2">{quiz.explanation}</div>
+      {done && submittedCorrect !== null && (
+        <div className={`rounded-xl border p-3 text-sm ${submittedCorrect ? "border-success/40 bg-success/10" : "border-error/40 bg-error/10"}`}>
+          <div className={`font-semibold ${submittedCorrect ? "text-success" : "text-error"}`}>
+            {submittedCorrect ? "정답이에요." : "아쉬워요, 정답을 확인해요."}
+          </div>
+          <div className="mt-1 text-text-muted">
+            정답: <span className="en font-medium text-text">{correctAnswerText(quiz)}</span>
+          </div>
+          {!submittedCorrect && quiz.explanation && (
+            <div className="mt-1 text-text-muted">{quiz.explanation}</div>
+          )}
+        </div>
+      )}
+      {done && submittedCorrect !== null && (
+        <button
+          onClick={moveNext}
+          className="rounded-xl bg-accent text-[#2A2522] px-4 py-2.5 font-medium active:scale-[0.99]"
+        >
+          다음
+        </button>
       )}
     </div>
   );
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
 function extractEn(q: Quiz): string {
@@ -43,6 +72,11 @@ function extractEn(q: Quiz): string {
   if (q.type === "word_arrange" || q.type === "translation")
     return q.answer.map(id => q.tokens.find(t => t.id === id)?.text).join(" ");
   return "";
+}
+
+function correctAnswerText(q: Quiz): string {
+  if (q.type === "ox") return q.answer ? "O" : "X";
+  return extractEn(q);
 }
 
 function renderPrompt(quiz: Quiz) {
@@ -119,7 +153,7 @@ function renderInput(quiz: Quiz, answer: unknown, done: boolean, submit: (a: unk
 function FillInput({ quiz, done, answer, submit }: any) {
   const [v, setV] = useState("");
   if (done) {
-    return <div className="text-sm text-text-muted">정답: <span className="en font-medium text-text">{quiz.answer.join(" / ")}</span></div>;
+    return <div className="text-sm text-text-muted">내 답: <span className="en font-medium text-text">{answer}</span></div>;
   }
   return (
     <div className="flex gap-2">
@@ -165,7 +199,7 @@ function ArrangeInput({ quiz, done, answer, submit }: any) {
         </div>
       )}
       {!done && <button onClick={() => submit(placed)} disabled={placed.length === 0} className="rounded-xl bg-accent text-[#2A2522] py-2 font-medium disabled:opacity-40">확인</button>}
-      {done && <div className="text-sm text-text-muted">정답: <span className="en font-medium text-text">{quiz.answer.map((id: string) => tokenMap[id]).join(" ")}</span></div>}
+      {done && <div className="text-sm text-text-muted">내 배열: <span className="en font-medium text-text">{display.map((id: string) => tokenMap[id]).join(" ")}</span></div>}
     </div>
   );
 }

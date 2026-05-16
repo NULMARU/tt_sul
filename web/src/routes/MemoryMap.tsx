@@ -23,8 +23,11 @@ export function MemoryMap() {
         <h1 className="text-xl font-bold">Phrase Memory Map</h1>
       </header>
       <p className="text-sm text-text-muted">
-        {weakFirst ? "흐려진 표현부터 보여줍니다." : "표현 지도를 한눈에 봅니다."} 카드를 탭하면 발음을 들을 수 있어요.
+        {weakFirst ? "복습이 필요한 표현부터 보여줍니다." : "표현 지도를 한눈에 봅니다."} 카드를 탭하면 발음을 들을 수 있어요.
       </p>
+      <div className="rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs text-text-muted leading-relaxed">
+        <b className="text-text">복습 필요</b>는 아직 맞힌 기록이 없거나 기억 강도가 낮은 표현이에요. 맞힌 기록이 쌓이면 <b className="text-text">익숙해짐</b>, <b className="text-text">기억 선명</b>으로 바뀝니다.
+      </div>
 
       <div className="grid grid-cols-2 gap-2.5">
         {phrases.map(p => {
@@ -50,15 +53,15 @@ export function MemoryMap() {
         })}
       </div>
 
-      <button onClick={async () => { await waitForTtsIdle(); nav("/review?n=10"); }} className="mt-2 rounded-xl bg-accent text-[#2A2522] px-4 py-3 font-medium">
-        흐려진 표현 10개 복습 ▸
+      <button onClick={async () => { await waitForTtsIdle(); nav("/review?practice=1&source=weak&n=10"); }} className="mt-2 rounded-xl bg-accent text-[#2A2522] px-4 py-3 font-medium">
+        복습 필요한 표현 10개 연습 ▸
       </button>
     </div>
   );
 }
 
 function memoryLabel(strength: number): { label: string; className: string } {
-  if (strength < 0.35) return { label: "흐림", className: "border-error/40 bg-error/10 text-error" };
-  if (strength < 0.7) return { label: "보통", className: "border-warn/40 bg-warn/10 text-warn" };
-  return { label: "선명", className: "border-success/40 bg-success/10 text-success" };
+  if (strength < 0.35) return { label: "복습 필요", className: "border-error/40 bg-error/10 text-error" };
+  if (strength < 0.7) return { label: "익숙해짐", className: "border-warn/40 bg-warn/10 text-warn" };
+  return { label: "기억 선명", className: "border-success/40 bg-success/10 text-success" };
 }

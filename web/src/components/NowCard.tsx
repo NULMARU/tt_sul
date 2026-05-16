@@ -83,7 +83,7 @@ export function NowCard() {
           className="rounded-xl border border-border px-3 py-2.5 text-sm text-text-muted"
           onClick={() => {
             recordFeedback(sug.id, "dismissed");
-            nav(sug.type === "review" ? `/lesson/${sug.lesson.id}` : "/review?n=3");
+            nav(sug.type === "review" ? `/lesson/${sug.lesson.id}` : "/review?practice=1&n=3");
           }}
         >
           {sug.type === "review" ? "강의로" : "1분만"}
