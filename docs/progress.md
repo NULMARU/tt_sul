@@ -4,6 +4,37 @@
 
 ---
 
+## 🌙 세션 #15 — 다른 축으로 탐색 과정별 분리
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | `일자` 축을 초급 30일 트랙, 중급 학습 순서, 상급 학습 순서로 분리 | [web/src/routes/AxisDay.tsx](../web/src/routes/AxisDay.tsx) |
+| 2 | `단계` 축 하단 Unit 목록을 현재 선택 과정에 맞게 변경 | [web/src/routes/AxisStage.tsx](../web/src/routes/AxisStage.tsx) |
+| 3 | `장소` 축을 중급 대화/리딩 맥락과 상급 이슈 맥락으로 확장 | [web/src/routes/AxisPlace.tsx](../web/src/routes/AxisPlace.tsx) |
+| 4 | `상황` 축을 중급 기능별 미션과 상급 토론·작문·발화 미션으로 확장 | [web/src/routes/AxisSituation.tsx](../web/src/routes/AxisSituation.tsx) |
+| 5 | `시간` 축도 중급/상급 추천 루프가 나오도록 함께 보강 | [web/src/routes/AxisTime.tsx](../web/src/routes/AxisTime.tsx) |
+| 6 | 낙서장 관심 주제와 생활 패턴을 축 탐색 정렬에 재사용하는 공통 로직 추가 | [web/src/lib/course-axis.ts](../web/src/lib/course-axis.ts) |
+
+### 설계 메모
+
+- 초급은 기존 30강, phrase, place, situation, time 좌표 체계를 그대로 유지합니다.
+- 중급은 `DIALOGUE_LESSONS`와 `INTERMEDIATE_READING_LESSONS`를 장소/상황/시간 축으로 다시 묶어 보여줍니다.
+- 상급은 기본 상급 글과 최신 생성 글을 합쳐 장소/상황/시간 축으로 재배열합니다.
+- 낙서장에 `우주산업`, `기술/AI`, `업무`, `여행`, `시사 토론` 같은 신호가 있으면 관련 축과 콘텐츠에 `맞춤` 표시가 붙고 우선 노출됩니다.
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+- ✅ `server/workers`: `npm run typecheck` 성공
+- ✅ `git diff --check` 성공
+- ✅ 브라우저 QA: 중급 선택 후 일자/장소/상황/시간 축에서 중급 전용 콘텐츠 표시 확인
+- ✅ 브라우저 QA: 상급 선택 후 단계/일자/장소/상황/시간 축에서 상급 전용 콘텐츠 표시 확인
+- ✅ 브라우저 QA: 상급 장소 축에서 낙서장 우주산업 신호가 기술·우주 랩과 Space 관련 글을 우선 노출하는 것 확인
+- ✅ 브라우저 콘솔 오류 0건
+- ✅ QA 스크린샷 저장: [42-axis-intermediate-day.png](qa-screens/42-axis-intermediate-day.png), [43-axis-intermediate-place.png](qa-screens/43-axis-intermediate-place.png), [44-axis-intermediate-situation.png](qa-screens/44-axis-intermediate-situation.png), [45-axis-intermediate-time.png](qa-screens/45-axis-intermediate-time.png), [46-axis-advanced-stage.png](qa-screens/46-axis-advanced-stage.png), [47-axis-advanced-day.png](qa-screens/47-axis-advanced-day.png), [48-axis-advanced-place.png](qa-screens/48-axis-advanced-place.png), [49-axis-advanced-situation.png](qa-screens/49-axis-advanced-situation.png), [50-axis-advanced-time.png](qa-screens/50-axis-advanced-time.png)
+
 ## 🌙 세션 #14 — 과정별 메모리맵 분리 + 낙서장 기반 동적 지도
 
 ### ✅ 이 세션에서 완료된 것
