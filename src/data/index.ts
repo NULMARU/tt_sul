@@ -10,4 +10,5 @@ export * from "./dialogue-quizzes";
 export * from "./intermediate-readings.seed";
 export * from "./intermediate-reading-quizzes";
 export * from "./advanced.seed";
+export * from "./advanced-quizzes";
 export * from "./quiz-generator";

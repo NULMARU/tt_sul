@@ -4,6 +4,37 @@
 
 ---
 
+## 🌙 세션 #13 — 과정별 오늘/1분학습 분리 + 하단 메뉴 순서 수정
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | 상급 선택 상태에서 `오늘`이 초급 Day 추천을 보여주던 문제 수정 | [web/src/routes/Home.tsx](../web/src/routes/Home.tsx) |
+| 2 | 중급 `오늘`을 대화 암송/리딩·리스닝 추천으로 분리 | [web/src/routes/Home.tsx](../web/src/routes/Home.tsx) |
+| 3 | 상급 `오늘`을 긴 글·토론·작문·발화 평가 추천으로 분리 | [web/src/routes/Home.tsx](../web/src/routes/Home.tsx) |
+| 4 | 기본 `1분학습`이 현재 과정에 맞는 문제를 생성하도록 수정 | [web/src/routes/Review.tsx](../web/src/routes/Review.tsx) |
+| 5 | 상급 전용 표현 퀴즈 생성기 추가 | [src/data/advanced-quizzes.ts](../src/data/advanced-quizzes.ts) |
+| 6 | 하단 메뉴 순서를 `오늘 → 1분학습 → 메모리맵 → 도구`로 변경 | [web/src/components/BottomBar.tsx](../web/src/components/BottomBar.tsx) |
+| 7 | 상급 객관식 보기에서 정답이 빠질 수 있던 회전 로직 수정 | [src/data/advanced-quizzes.ts](../src/data/advanced-quizzes.ts) |
+
+### 설계 메모
+
+- 초급 과정에서는 기존 Day/회로/스토리 중심 홈을 유지합니다.
+- 중급 과정에서는 초급 Day를 숨기고, 대화 암송과 뉴스형 리딩·리스닝을 오늘 추천과 1분학습의 기본 콘텐츠로 사용합니다.
+- 상급 과정에서는 초급 Day를 숨기고, 낙서장 관심 주제와 상급 글 진행률을 반영해 긴 글·토론·발화 과제를 추천합니다.
+- `1분학습`은 명시적인 source가 없더라도 현재 선택 과정에 따라 초급/중급/상급 문제 은행을 선택합니다.
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+- ✅ 브라우저 QA: 상급 선택 후 홈에서 초급 Day 대신 상급 글 추천 표시 확인
+- ✅ 브라우저 QA: 상급 1분학습에서 상급 표현 문제와 정답 피드백 확인
+- ✅ 브라우저 QA: 중급 선택 후 홈에서 중급 대화/리딩 추천 표시 확인
+- ✅ 브라우저 QA: 중급 1분학습에서 중급 대화 문제 표시 확인
+- ✅ 브라우저 콘솔 오류 0건
+- ✅ QA 스크린샷 저장: [37-course-aware-home-advanced.png](qa-screens/37-course-aware-home-advanced.png), [38-course-aware-review-advanced.png](qa-screens/38-course-aware-review-advanced.png), [39-course-aware-review-intermediate.png](qa-screens/39-course-aware-review-intermediate.png)
+
 ## 🌙 세션 #12 — 중급 뉴스형 리딩/리스닝 랩 추가 + 영어 앱 마감 QA
 
 ### ✅ 이 세션에서 완료된 것

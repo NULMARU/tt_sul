@@ -6,10 +6,12 @@ import { LESSONS } from "@shared/data/stages.seed";
 import { PHRASES } from "@shared/data/phrases.seed";
 import { getDialogueQuizBank } from "@shared/data/dialogue-quizzes";
 import { getIntermediateReadingQuizBank } from "@shared/data/intermediate-reading-quizzes";
+import { ADVANCED_ARTICLES } from "@shared/data/advanced.seed";
+import { getAdvancedQuizBank } from "@shared/data/advanced-quizzes";
 import { generateLessonQuizzes, makeArrange, makeFill, makeMC, makeOX } from "@shared/data/quiz-generator";
 import { QuizPlayer } from "../components/QuizPlayer";
 import { waitForTtsIdle } from "../lib/tts";
-import type { Lesson, Quiz, QuizFill } from "@shared/types/schema";
+import type { AdvancedArticle, CourseLevelId, Lesson, Quiz, QuizFill } from "@shared/types/schema";
 
 export function Review() {
   const nav = useNavigate();
@@ -20,10 +22,16 @@ export function Review() {
   const journal = useStore(s => s.journal ?? []);
   const writingMistakes = useStore(s => s.writingMistakes ?? []);
   const customContentPhrases = useStore(s => s.customContentPhrases ?? []);
+  const currentCourseLevel = useStore(s => s.currentCourseLevel ?? "beginner");
+  const generatedAdvancedArticles = useStore(s => s.generatedAdvancedArticles ?? []);
   const limit = Math.min(30, Number(params.get("n") ?? "5") || 5);
   const wrongOnly = params.get("wrong") === "1";
   const practiceMode = params.get("practice") === "1";
   const source = params.get("source") ?? "";
+  const advancedArticles = useMemo(
+    () => mergeAdvancedArticles(generatedAdvancedArticles, ADVANCED_ARTICLES),
+    [generatedAdvancedArticles],
+  );
 
   // 사용자가 푼 적 있는 퀴즈 ID
   const dueIds = useMemo(() => buildReviewQueue(attempts, { n: limit, wrongOnly }), [attempts, limit, wrongOnly]);
@@ -32,8 +40,9 @@ export function Review() {
     ...LESSONS.flatMap(buildLessonQuizBank),
     ...getDialogueQuizBank(),
     ...getIntermediateReadingQuizBank(),
+    ...getAdvancedQuizBank(advancedArticles),
     ...generateLessonQuizzes(customContentPhrases, "content-lab"),
-  ], [customContentPhrases]);
+  ], [advancedArticles, customContentPhrases]);
   const journalQuizzes = useMemo<QuizFill[]>(() =>
     [...journal].reverse().flatMap(j =>
       (j.derivedQuizzes ?? []).map(q => ({
@@ -68,32 +77,43 @@ export function Review() {
     const byId = new Map<Quiz["id"], Quiz>([...lessonQuizBank, ...journalQuizzes, ...writingMistakeQuizzes].map(q => [q.id, q]));
     return dueIds.map(id => byId.get(id)).filter(Boolean) as Quiz[];
   }, [dueIds, journalQuizzes, lessonQuizBank, writingMistakeQuizzes]);
+  const scopedDueQuizzes = useMemo(
+    () => dueQuizzes.filter(quiz => quizMatchesCourse(quiz, currentCourseLevel)),
+    [currentCourseLevel, dueQuizzes],
+  );
 
   const computedQuizzes = useMemo<Quiz[]>(() => {
-    if (dueQuizzes.length > 0) return dueQuizzes.slice(0, limit);
+    if (practiceMode) {
+      if (source === "weak") return buildWeakPracticeQuizzes(srs, limit, customContentPhrases);
+      const practiceQuizzes = buildCoursePracticeQuizzes(source || currentCourseLevel, limit, advancedArticles);
+      if (practiceQuizzes.length > 0) return practiceQuizzes;
+    }
+    if (scopedDueQuizzes.length > 0) return scopedDueQuizzes.slice(0, limit);
+    if (wrongOnly) return [];
     if (writingMistakeQuizzes.length > 0 && !wrongOnly && !practiceMode) return writingMistakeQuizzes.slice(0, limit);
     if (journalQuizzes.length > 0 && !wrongOnly && !practiceMode) return journalQuizzes.slice(0, limit);
-    if (!practiceMode) return [];
-    if (source === "weak") return buildWeakPracticeQuizzes(srs, limit, customContentPhrases);
-    if (source === "dialogues") return getDialogueQuizBank().slice(0, limit);
-    if (source === "intermediate-readings") return getIntermediateReadingQuizBank().slice(0, limit);
+    if (!practiceMode) return buildCoursePracticeQuizzes(currentCourseLevel, limit, advancedArticles);
 
     const first = LESSONS[0];
     const phrases = lessonPhrases(first);
     return generateLessonQuizzes(phrases, first.id).slice(0, limit);
-  }, [customContentPhrases, dueQuizzes, journalQuizzes, limit, practiceMode, source, srs, writingMistakeQuizzes, wrongOnly]);
+  }, [advancedArticles, currentCourseLevel, customContentPhrases, journalQuizzes, limit, practiceMode, scopedDueQuizzes, source, srs, writingMistakeQuizzes, wrongOnly]);
 
   const computedKey = computedQuizzes.map(q => q.id).join("|");
   const routeKey = `${location.key}:${limit}:${wrongOnly ? "wrong" : "all"}:${practiceMode ? "practice" : "review"}:${source}`;
-  const hasUnmatchedDue = dueIds.length > 0 && dueQuizzes.length === 0;
+  const hasUnmatchedDue = dueIds.length > 0 && scopedDueQuizzes.length === 0;
   const computedModeLabel =
     wrongOnly ? "오답만" :
-    dueQuizzes.length > 0 ? "복습" :
+    scopedDueQuizzes.length > 0 ? "복습" :
     writingMistakeQuizzes.length > 0 && !practiceMode ? "오답노트" :
     journalQuizzes.length > 0 && !practiceMode ? "일기 문제" :
     practiceMode && source === "dialogues" ? "대화 복습" :
     practiceMode && source === "intermediate-readings" ? "중급 리딩" :
+    practiceMode && (source === "intermediate" || (!source && currentCourseLevel === "intermediate")) ? "중급 1분학습" :
+    practiceMode && (source === "advanced" || (!source && currentCourseLevel === "advanced")) ? "상급 1분학습" :
     practiceMode ? "연습" :
+    currentCourseLevel === "intermediate" ? "중급 1분학습" :
+    currentCourseLevel === "advanced" ? "상급 1분학습" :
     "복습";
 
   const [idx, setIdx] = useState(0);
@@ -129,7 +149,7 @@ export function Review() {
         </p>
         <div className="mt-2 flex flex-col sm:flex-row gap-2">
           <button onClick={async () => { await waitForTtsIdle(); nav("/"); }} className="rounded-xl bg-accent text-[#2A2522] px-4 py-2.5 font-medium">메인으로</button>
-          <button onClick={async () => { await waitForTtsIdle(); nav(`/review?practice=1&n=${limit}`); }} className="rounded-xl border border-border px-4 py-2.5 font-medium text-text">연습 문제 풀기</button>
+          <button onClick={async () => { await waitForTtsIdle(); nav(reviewPracticePath(currentCourseLevel, limit)); }} className="rounded-xl border border-border px-4 py-2.5 font-medium text-text">연습 문제 풀기</button>
         </div>
       </div>
     );
@@ -185,4 +205,50 @@ function buildWeakPracticeQuizzes(srs: ReturnType<typeof useStore.getState>["srs
     .sort((a, b) => memoryStrength(srs[`q-mc-${a.id}`]) - memoryStrength(srs[`q-mc-${b.id}`]))
     .slice(0, Math.max(8, limit));
   return generateLessonQuizzes(phrases, "memory-map").slice(0, limit);
+}
+
+function buildCoursePracticeQuizzes(sourceOrLevel: string, limit: number, advancedArticles: AdvancedArticle[]): Quiz[] {
+  if (sourceOrLevel === "dialogues") return getDialogueQuizBank().slice(0, limit);
+  if (sourceOrLevel === "intermediate-readings") return getIntermediateReadingQuizBank().slice(0, limit);
+  if (sourceOrLevel === "intermediate") {
+    return interleaveQuizzes(getDialogueQuizBank(), getIntermediateReadingQuizBank()).slice(0, limit);
+  }
+  if (sourceOrLevel === "advanced") return getAdvancedQuizBank(advancedArticles).slice(0, limit);
+
+  const first = LESSONS[0];
+  return generateLessonQuizzes(lessonPhrases(first), first.id).slice(0, limit);
+}
+
+function quizMatchesCourse(quiz: Quiz, level: CourseLevelId): boolean {
+  if (quiz.lessonId === "journal" || quiz.lessonId === "writing-mistake" || quiz.lessonId === "content-lab") return true;
+  const tags = quiz.tags ?? [];
+  if (level === "advanced") return tags.includes("stage-3") || quiz.id.startsWith("q-adv-");
+  if (level === "intermediate") return tags.includes("stage-2") || quiz.id.startsWith("q-dlg-") || quiz.id.startsWith("q-int-read-");
+  return LESSONS.some(lesson => lesson.id === quiz.lessonId) || !!quiz.reference?.phraseId;
+}
+
+function interleaveQuizzes(...banks: Quiz[][]): Quiz[] {
+  const max = Math.max(...banks.map(bank => bank.length));
+  const output: Quiz[] = [];
+  for (let index = 0; index < max; index += 1) {
+    banks.forEach(bank => {
+      if (bank[index]) output.push(bank[index]);
+    });
+  }
+  return output;
+}
+
+function reviewPracticePath(level: CourseLevelId, limit: number): string {
+  if (level === "advanced") return `/review?practice=1&source=advanced&n=${limit}`;
+  if (level === "intermediate") return `/review?practice=1&source=intermediate&n=${limit}`;
+  return `/review?practice=1&n=${limit}`;
+}
+
+function mergeAdvancedArticles(generated: AdvancedArticle[], seeded: AdvancedArticle[]): AdvancedArticle[] {
+  const seen = new Set<string>();
+  return [...generated, ...seeded].filter(article => {
+    if (seen.has(article.id)) return false;
+    seen.add(article.id);
+    return true;
+  });
 }
