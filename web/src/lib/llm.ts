@@ -1,3 +1,5 @@
+import type { AdvancedArticle, AdvancedSourceItem } from "@shared/types/schema";
+
 /**
  * LLM 클라이언트 — Cloudflare Workers 프록시 호출.
  * VITE_LLM_PROXY_URL 미설정 시 LLM 기능은 비활성화(폴백 로컬 응답).
@@ -92,6 +94,83 @@ export interface ContentSuggestionDraft {
 
 export async function suggestContentUpdate(payload: unknown): Promise<ContentSuggestionDraft | null> {
   return callProxy<ContentSuggestionDraft>("/content-suggestions", payload);
+}
+
+export interface AdvancedCurrentTopicResult {
+  article: AdvancedArticle;
+  sourceItems?: AdvancedSourceItem[];
+  cachedSources?: boolean;
+  modelSource?: "anthropic" | "gemini" | string;
+}
+
+export async function generateAdvancedCurrentTopic(payload: {
+  topics: string[];
+  recentJournal?: string[];
+  existingTitles?: string[];
+}): Promise<AdvancedCurrentTopicResult | null> {
+  return callProxy<AdvancedCurrentTopicResult>("/advanced-current-topic", payload);
+}
+
+export interface RoleplayChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function streamRoleplay(
+  payload: {
+    scene: string;
+    role: string;
+    phrases: string[];
+    messages: RoleplayChatMessage[];
+  },
+  onDelta: (delta: string) => void,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  if (!PROXY) return null;
+  try {
+    const res = await fetch(`${PROXY}/roleplay`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "X-User-Id": userId() },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    if (!res.ok || !res.body) return null;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let text = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+
+      for (const event of events) {
+        for (const line of event.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const raw = line.replace(/^data:\s*/, "").trim();
+          if (!raw || raw === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(raw);
+            const delta = parsed?.delta?.text;
+            if (parsed?.type === "content_block_delta" && typeof delta === "string") {
+              text += delta;
+              onDelta(delta);
+            }
+          } catch {
+            // Ignore malformed stream fragments and keep reading.
+          }
+        }
+      }
+    }
+
+    return text.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 export function llmAvailable(): boolean { return !!PROXY; }

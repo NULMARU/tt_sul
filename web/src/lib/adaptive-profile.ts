@@ -6,16 +6,18 @@ import type {
   TimeBand,
   UserState,
 } from "@shared/types/schema";
+import { buildJournalInsight } from "./journal-insights";
 
 const BANDS: TimeBand[] = ["dawn", "morning", "midday", "afternoon", "evening", "night"];
 const STEPS: LearningStep[] = ["understand", "absorb", "read", "produce", "imprint"];
 
-export function buildLearnerProfile(state: Pick<UserState, "learningSignals" | "quizAttempts" | "recallSpeedMs">): LearnerProfile {
+export function buildLearnerProfile(state: Pick<UserState, "learningSignals" | "quizAttempts" | "recallSpeedMs" | "journal" | "writingMistakes">): LearnerProfile {
   const signals = recentSignals(state.learningSignals ?? [], 14);
   const preferredTimeBands = topKeys(scoreBands(signals), 3, BANDS);
   const { bestModes, fragileModes } = scoreSteps(signals);
   const weakPhraseIds = weakPhrases(state.quizAttempts ?? {}, state.recallSpeedMs ?? {});
   const averageSessionSecondsByBand = averageDurations(signals);
+  const journalInsight = buildJournalInsight(state.journal ?? [], state.writingMistakes ?? []);
   const recommendationAffinity = Object.fromEntries(BANDS.flatMap(b => {
     const seenAtBand = signals.some(s => s.timeBand === b);
     if (!seenAtBand) return [];
@@ -35,6 +37,7 @@ export function buildLearnerProfile(state: Pick<UserState, "learningSignals" | "
     fragileModes,
     averageSessionSecondsByBand,
     recommendationAffinity,
+    journalInsight,
   };
 }
 

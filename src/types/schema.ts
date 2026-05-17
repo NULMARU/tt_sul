@@ -4,6 +4,24 @@
 // ============================================================
 
 // ─── 5축 좌표 태그 ──────────────────────────────────────────
+export type LanguageId = "en" | "vi" | "ja";
+
+export interface LanguageConfig {
+  id: LanguageId;
+  nameKo: string;
+  nameNative: string;
+  targetLocale: string;
+  nativeLocale: "ko-KR";
+  script: "latin" | "vietnamese" | "japanese";
+  developmentOrder: number;
+  status: "active" | "planned";
+  defaultCourseLevel: CourseLevelId;
+  supportsWordArrange: boolean;
+  supportsDictation: boolean;
+  supportsRomanization: boolean;
+  notes: string[];
+}
+
 export type StageId = "stage-1" | "stage-2" | "stage-3" | "stage-4" | "stage-5";
 
 export type PlaceTag =
@@ -32,8 +50,10 @@ export interface Coords {
 // ─── Phrase: 모든 학습의 최소 단위 ──────────────────────────
 export interface Phrase {
   id: string;               // "wake_up"
+  languageId?: LanguageId;  // 미지정 시 현재 영어 콘텐츠(en)로 간주
   ko: string;               // 한국어
   en: string;               // 영어
+  romanization?: string;    // 베트남어/일본어 확장용
   past?: string;            // 과거형
   ipa?: string;             // 발음 기호 (선택)
   coords: Coords;
@@ -168,6 +188,223 @@ export interface Stage {
   unlockThreshold: number;  // 0..1, 직전 단계 진척률
 }
 
+// ─── Course Level: 초급/중급/상급 상위 과정 ───────────────
+export type CourseLevelId = "beginner" | "intermediate" | "advanced";
+
+export interface CourseLevel {
+  id: CourseLevelId;
+  title: string;
+  shortTitle: string;
+  description: string;
+  learnerGoal: string;
+  primaryLoop: "phrase-circuit" | "dialogue-recitation" | "article-debate";
+  recommendedFor: string[];
+  entryRoute?: string;
+}
+
+export type PromotionExamKind = "placement" | "promotion";
+
+export type PromotionExamSectionType =
+  | "phrase-recall"
+  | "story-comprehension"
+  | "dialogue-response"
+  | "writing"
+  | "opinion";
+
+export interface PromotionExamSectionBlueprint {
+  id: string;
+  type: PromotionExamSectionType;
+  title: string;
+  instruction: string;
+  points: number;
+}
+
+export interface PromotionExamBlueprint {
+  id: string;
+  kind: PromotionExamKind;
+  levelId: CourseLevelId;
+  targetLevelId?: CourseLevelId;
+  title: string;
+  description: string;
+  gameTheme: string;
+  passingScore: number;
+  sections: PromotionExamSectionBlueprint[];
+}
+
+export interface PromotionExamAttempt {
+  id: string;
+  examId: string;
+  kind: PromotionExamKind;
+  levelId: CourseLevelId;
+  targetLevelId?: CourseLevelId;
+  startedAt: string;
+  completedAt: string;
+  seed: number;
+  totalScore: number;
+  maxScore: number;
+  passed: boolean;
+  recommendedLevel: CourseLevelId;
+  sectionResults: {
+    sectionId: string;
+    type: PromotionExamSectionType;
+    score: number;
+    maxScore: number;
+    feedback: string;
+  }[];
+  feedback: string[];
+}
+
+// ─── Dialogue Lesson: 중급 암송 과정 ────────────────────────
+export type DialoguePracticeMode = "realtime" | "pause-repeat" | "role-a" | "role-b" | "korean-hint";
+
+export interface DialogueTurn {
+  id: string;
+  speaker: "A" | "B";
+  en: string;
+  ko: string;
+  hintKo?: string;
+  phraseIds?: string[];
+  functionTags?: string[];
+}
+
+export interface DialogueLesson {
+  id: string;
+  languageId: LanguageId;
+  levelId: CourseLevelId;
+  unitId: string;
+  title: string;
+  subtitle: string;
+  situation: string;
+  emoji?: string;
+  targetFunctions: string[];
+  recitationModes: DialoguePracticeMode[];
+  turns: DialogueTurn[];
+}
+
+// ─── Intermediate Reading: 중급 뉴스·문화 리딩/리스닝 ────────
+export type IntermediateSourceCategory =
+  | "global-learning"
+  | "asia-news"
+  | "culture-society"
+  | "community-explainer";
+
+export interface IntermediateSourceProfile {
+  id: string;
+  label: string;
+  url: string;
+  category: IntermediateSourceCategory;
+  suitabilityKo: string;
+  usePolicyKo: string;
+}
+
+export interface IntermediateVocabularyItem {
+  term: string;
+  ko: string;
+  example: string;
+}
+
+export interface IntermediateComprehensionQuestion {
+  question: string;
+  choices: string[];
+  answerIndex: number;
+  explanationKo: string;
+}
+
+export interface IntermediateReadingLesson {
+  id: string;
+  languageId: LanguageId;
+  levelId: "intermediate";
+  unitId: string;
+  sourceProfileId: string;
+  title: string;
+  subtitle: string;
+  emoji?: string;
+  difficulty: "B1" | "B1-B2" | "B2";
+  estimatedMinutes: number;
+  topicTags: string[];
+  skillFocus: ("gist" | "vocabulary" | "listening" | "summary" | "speaking")[];
+  sourceUseNoteKo: string;
+  body: string;
+  keyVocabulary: IntermediateVocabularyItem[];
+  gistQuestion: string;
+  comprehension: IntermediateComprehensionQuestion;
+  shadowingSentences: string[];
+  writingPrompt: string;
+  speakingPrompt: string;
+}
+
+// ─── Advanced Article: 상급 읽기·토론·발화 평가 ─────────────
+export type AdvancedArticleCategory = "work" | "news" | "society";
+
+export interface AdvancedExpression {
+  en: string;
+  ko: string;
+  usage: string;
+}
+
+export interface DebatePrompt {
+  question: string;
+  stanceA: string;
+  stanceB: string;
+  usefulFrames: string[];
+}
+
+export interface SpeakingRubricItem {
+  criterion: "clarity" | "structure" | "evidence" | "delivery";
+  label: string;
+  description: string;
+}
+
+export interface AdvancedArticle {
+  id: string;
+  languageId: LanguageId;
+  levelId: "advanced";
+  category: AdvancedArticleCategory;
+  generatedAt?: string;
+  isGenerated?: boolean;
+  interestTags?: string[];
+  trendLabelKo?: string;
+  sourceNoteKo?: string;
+  sourceItems?: AdvancedSourceItem[];
+  title: string;
+  subtitle: string;
+  summaryKo: string;
+  estimatedMinutes: number;
+  body: string;
+  keyExpressions: AdvancedExpression[];
+  debate: DebatePrompt;
+  writingPrompt: string;
+  speakingPrompt: string;
+  sampleAnswer: string;
+  rubric: SpeakingRubricItem[];
+}
+
+export interface AdvancedSourceItem {
+  source: string;
+  title: string;
+  url: string;
+  publishedAt?: string;
+}
+
+export interface AdvancedWritingFeedback {
+  id: string;
+  createdAt: string;
+  source: "local" | "llm";
+  prompt: string;
+  score?: number;
+  feedback: string;
+  corrected?: string;
+  wordCount: number;
+}
+
+export interface AdvancedSpeakingAttempt {
+  id: string;
+  createdAt: string;
+  prompt: string;
+  rubricScores: Partial<Record<SpeakingRubricItem["criterion"], number>>;
+  note?: string;
+}
+
 // ─── Daily Story (장문 독해) ──────────────────────────────
 export type StoryGenre = "diary" | "dialogue" | "column";
 export type StoryDifficulty = "easy" | "natural" | "challenge";
@@ -293,6 +530,14 @@ export type LearningSignalType =
   | "recommendation_shown"
   | "recommendation_clicked"
   | "recommendation_dismissed"
+  | "promotion_exam_complete"
+  | "intermediate_reading_read"
+  | "intermediate_listening_practice"
+  | "intermediate_reading_complete"
+  | "advanced_article_read"
+  | "advanced_writing_feedback"
+  | "advanced_speaking_practice"
+  | "advanced_article_complete"
   | "adaptive_ui_applied"
   | "adaptive_ui_reverted";
 
@@ -320,6 +565,19 @@ export interface LearnerProfile {
   fragileModes: LearningStep[];
   averageSessionSecondsByBand: Partial<Record<TimeBand, number>>;
   recommendationAffinity: Partial<Record<TimeBand, "quick" | "full" | "audio-only">>;
+  journalInsight?: JournalInsight;
+}
+
+export interface JournalInsight {
+  updatedAt: string;
+  entryCount: number;
+  averageWordsPerEntry: number;
+  correctionRate: number;
+  connectorUse: number;
+  preferredTopics: string[];
+  dailyPatternTags: string[];
+  suggestedLevel: CourseLevelId;
+  notes: string[];
 }
 
 export interface RecommendationFeedback {
@@ -359,6 +617,42 @@ export interface AdaptiveUiPatch {
 }
 
 export interface UserState {
+  targetLanguageId: LanguageId;
+  currentCourseLevel: CourseLevelId;
+  promotionExamAttempts: PromotionExamAttempt[];
+  dialogueProgress: Record<string, {
+    completed: boolean;
+    completedAt?: string;
+    practiceCount: number;
+    lastMode?: DialoguePracticeMode;
+    modeCounts: Partial<Record<DialoguePracticeMode, number>>;
+    lastPracticedAt?: string;
+  }>;
+  intermediateReadingProgress: Record<string, {
+    read: boolean;
+    readAt?: string;
+    completed: boolean;
+    completedAt?: string;
+    listenCount: number;
+    shadowingCount: number;
+    quizCorrect?: boolean;
+    lastPracticedAt?: string;
+  }>;
+  advancedArticleProgress: Record<string, {
+    read: boolean;
+    readAt?: string;
+    completed: boolean;
+    completedAt?: string;
+    summaryDraft?: string;
+    opinionDraft?: string;
+    debateStance?: "A" | "B" | "balanced";
+    debateNote?: string;
+    writingFeedbackHistory?: AdvancedWritingFeedback[];
+    speakingPracticeCount: number;
+    speakingAttempts?: AdvancedSpeakingAttempt[];
+    lastPracticedAt?: string;
+  }>;
+  generatedAdvancedArticles: AdvancedArticle[];
   srs: Record<string, SRSState>;            // by phraseId or quizId
   quizAttempts: Record<string, QuizAttempt>;
   recallSpeedMs: Record<string, number[]>;  // 인출 속도 샘플

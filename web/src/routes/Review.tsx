@@ -4,6 +4,8 @@ import { useStore } from "../lib/store";
 import { buildReviewQueue, memoryStrength } from "../lib/srs";
 import { LESSONS } from "@shared/data/stages.seed";
 import { PHRASES } from "@shared/data/phrases.seed";
+import { getDialogueQuizBank } from "@shared/data/dialogue-quizzes";
+import { getIntermediateReadingQuizBank } from "@shared/data/intermediate-reading-quizzes";
 import { generateLessonQuizzes, makeArrange, makeFill, makeMC, makeOX } from "@shared/data/quiz-generator";
 import { QuizPlayer } from "../components/QuizPlayer";
 import { waitForTtsIdle } from "../lib/tts";
@@ -13,9 +15,9 @@ export function Review() {
   const nav = useNavigate();
   const location = useLocation();
   const [params] = useSearchParams();
-  const attempts = useStore(s => s.quizAttempts);
-  const srs = useStore(s => s.srs);
-  const journal = useStore(s => s.journal);
+  const attempts = useStore(s => s.quizAttempts ?? {});
+  const srs = useStore(s => s.srs ?? {});
+  const journal = useStore(s => s.journal ?? []);
   const writingMistakes = useStore(s => s.writingMistakes ?? []);
   const customContentPhrases = useStore(s => s.customContentPhrases ?? []);
   const limit = Math.min(30, Number(params.get("n") ?? "5") || 5);
@@ -28,6 +30,8 @@ export function Review() {
 
   const lessonQuizBank = useMemo(() => [
     ...LESSONS.flatMap(buildLessonQuizBank),
+    ...getDialogueQuizBank(),
+    ...getIntermediateReadingQuizBank(),
     ...generateLessonQuizzes(customContentPhrases, "content-lab"),
   ], [customContentPhrases]);
   const journalQuizzes = useMemo<QuizFill[]>(() =>
@@ -71,11 +75,13 @@ export function Review() {
     if (journalQuizzes.length > 0 && !wrongOnly && !practiceMode) return journalQuizzes.slice(0, limit);
     if (!practiceMode) return [];
     if (source === "weak") return buildWeakPracticeQuizzes(srs, limit, customContentPhrases);
+    if (source === "dialogues") return getDialogueQuizBank().slice(0, limit);
+    if (source === "intermediate-readings") return getIntermediateReadingQuizBank().slice(0, limit);
 
     const first = LESSONS[0];
     const phrases = lessonPhrases(first);
     return generateLessonQuizzes(phrases, first.id).slice(0, limit);
-  }, [dueQuizzes, journalQuizzes, limit, practiceMode, source, srs, writingMistakeQuizzes, wrongOnly]);
+  }, [customContentPhrases, dueQuizzes, journalQuizzes, limit, practiceMode, source, srs, writingMistakeQuizzes, wrongOnly]);
 
   const computedKey = computedQuizzes.map(q => q.id).join("|");
   const routeKey = `${location.key}:${limit}:${wrongOnly ? "wrong" : "all"}:${practiceMode ? "practice" : "review"}:${source}`;
@@ -85,6 +91,8 @@ export function Review() {
     dueQuizzes.length > 0 ? "복습" :
     writingMistakeQuizzes.length > 0 && !practiceMode ? "오답노트" :
     journalQuizzes.length > 0 && !practiceMode ? "일기 문제" :
+    practiceMode && source === "dialogues" ? "대화 복습" :
+    practiceMode && source === "intermediate-readings" ? "중급 리딩" :
     practiceMode ? "연습" :
     "복습";
 

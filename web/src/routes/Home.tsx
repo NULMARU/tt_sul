@@ -6,14 +6,18 @@ import { DailyStoryCard } from "../components/DailyStoryCard";
 import { AxisChips } from "../components/AxisChips";
 import { bandLabel, currentTimeBand } from "../lib/time";
 import { APP_VERSION } from "../lib/version";
+import { COURSE_LEVEL_BY_ID } from "@shared/data/course-levels.seed";
 
 export function Home() {
   const nav = useNavigate();
   const stats = useStore(s => s.stats);
   const goal = useStore(s => s.prefs.dailyMinutesGoal);
+  const currentCourseLevel = useStore(s => s.currentCourseLevel ?? "beginner");
+  const journalInsight = useStore(s => s.learnerProfile?.journalInsight);
   const todayMin = Math.floor(stats.totalStudySeconds / 60);
   const pct = Math.min(100, Math.round((todayMin / goal) * 100));
   const band = currentTimeBand();
+  const currentLevel = COURSE_LEVEL_BY_ID[currentCourseLevel];
 
   return (
     <div className="px-5 pt-6 pb-4 flex flex-col gap-4">
@@ -22,6 +26,12 @@ export function Home() {
         <div>
           <div className="text-sm text-text-muted">{bandLabel(band)} · 환영합니다</div>
           <div className="text-2xl font-bold mt-0.5">Sulsul+ <span className="text-xs align-middle text-text-muted">v{APP_VERSION}</span></div>
+          <button
+            onClick={() => nav("/axis/stage")}
+            className="mt-1 text-xs text-accent-strong"
+          >
+            현재 과정: {currentLevel?.shortTitle ?? "초급"} →
+          </button>
         </div>
         <div className="text-right">
           <div className="flex items-center gap-1.5 text-sm bg-accent/15 border border-accent/40 rounded-full px-2.5 py-1">
@@ -58,8 +68,13 @@ export function Home() {
         </div>
         <div className="mt-1 font-semibold leading-snug">짧게 쓰거나 말해서 남기기</div>
         <div className="text-sm text-text-muted mt-0.5">
-          영어 한 문장을 저장하면 복습용 빈칸 문제로 이어집니다.
+          영어 한 문장을 저장하면 복습 문제와 학습자 인사이트로 이어집니다.
         </div>
+        {journalInsight && journalInsight.entryCount > 0 && (
+          <div className="mt-2 rounded-xl bg-surface-2 px-3 py-2 text-xs text-text-muted">
+            최근 낙서장: {journalInsight.preferredTopics[0] ?? "일상"} 중심 · 추천 {COURSE_LEVEL_BY_ID[journalInsight.suggestedLevel]?.shortTitle}
+          </div>
+        )}
       </button>
 
       {/* 5축 칩 */}

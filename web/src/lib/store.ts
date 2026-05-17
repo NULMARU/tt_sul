@@ -4,17 +4,23 @@ import { get as idbGet, set as idbSet, del as idbDel } from "idb-keyval";
 import { PHRASES } from "@shared/data/phrases.seed";
 import type {
   AdaptiveUiPatch,
+  AdvancedSpeakingAttempt,
+  AdvancedWritingFeedback,
   ContentSuggestion,
+  CourseLevelId,
+  DialoguePracticeMode,
   LearningSignal,
   LearnerProfile,
+  PromotionExamAttempt,
   RecommendationFeedback,
   StoryDifficulty,
   UserState,
 } from "@shared/types/schema";
 import { updateAttempt, updateSRS } from "./srs";
 import { currentTimeBand } from "./time";
+import { DEFAULT_LANGUAGE_ID, userStateStoreKey } from "./language-storage";
 
-const STORE_KEY = "sulsul-plus:user-state";
+const STORE_KEY = userStateStoreKey(DEFAULT_LANGUAGE_ID);
 
 const idbStorage = {
   getItem: async (name: string) => (await idbGet<string>(name)) ?? null,
@@ -24,6 +30,13 @@ const idbStorage = {
 
 function emptyState(): UserState {
   return {
+    targetLanguageId: DEFAULT_LANGUAGE_ID,
+    currentCourseLevel: "beginner",
+    promotionExamAttempts: [],
+    dialogueProgress: {},
+    intermediateReadingProgress: {},
+    advancedArticleProgress: {},
+    generatedAdvancedArticles: [],
     srs: {},
     quizAttempts: {},
     recallSpeedMs: {},
@@ -67,6 +80,21 @@ function emptyState(): UserState {
 }
 
 interface StoreActions {
+  setTargetLanguage: (languageId: UserState["targetLanguageId"]) => void;
+  setCurrentCourseLevel: (levelId: CourseLevelId) => void;
+  recordPromotionExamAttempt: (attempt: PromotionExamAttempt) => void;
+  addGeneratedAdvancedArticle: (article: UserState["generatedAdvancedArticles"][number]) => void;
+  recordDialoguePractice: (dialogueId: string, mode: DialoguePracticeMode) => void;
+  completeDialogue: (dialogueId: string) => void;
+  recordIntermediateReadingRead: (lessonId: string) => void;
+  recordIntermediateListeningPractice: (lessonId: string, shadowing?: boolean) => void;
+  completeIntermediateReading: (lessonId: string, quizCorrect?: boolean) => void;
+  recordAdvancedArticleRead: (articleId: string) => void;
+  saveAdvancedDebateNote: (articleId: string, debate: { debateStance?: "A" | "B" | "balanced"; debateNote?: string }) => void;
+  saveAdvancedArticleDraft: (articleId: string, draft: { summaryDraft?: string; opinionDraft?: string }) => void;
+  saveAdvancedWritingFeedback: (articleId: string, feedback: Omit<AdvancedWritingFeedback, "id" | "createdAt">) => void;
+  recordAdvancedSpeakingPractice: (articleId: string, attempt?: Omit<AdvancedSpeakingAttempt, "id" | "createdAt">) => void;
+  completeAdvancedArticle: (articleId: string) => void;
   recordCardView: (lessonId: string, cardOrder: number, total: number) => void;
   recordQuizAttempt: (quizId: string, lessonId: string | undefined, correct: boolean, recallMs?: number) => void;
   completeLesson: (lessonId: string) => void;
@@ -102,6 +130,281 @@ export const useStore = create<UserState & StoreActions>()(
   persist(
     (set, get) => ({
       ...emptyState(),
+
+      setTargetLanguage: (languageId) => set({ targetLanguageId: languageId }),
+
+      setCurrentCourseLevel: (levelId) => set({ currentCourseLevel: levelId }),
+
+      addGeneratedAdvancedArticle: (article) => set(s => ({
+        generatedAdvancedArticles: [
+          article,
+          ...(s.generatedAdvancedArticles ?? []).filter(existing => existing.id !== article.id),
+        ].slice(0, 20),
+      })),
+
+      recordPromotionExamAttempt: (attempt) => set(s => ({
+        promotionExamAttempts: [...(s.promotionExamAttempts ?? []), attempt].slice(-30),
+        learningSignals: [
+          ...(s.learningSignals ?? []).slice(-499),
+          createSignal({
+            type: "promotion_exam_complete",
+            result: attempt.passed ? "success" : "skip",
+            metadata: {
+              promotionExamId: attempt.examId,
+              score: attempt.totalScore,
+              maxScore: attempt.maxScore,
+              passed: attempt.passed,
+              recommendedLevel: attempt.recommendedLevel,
+            },
+          }),
+        ],
+      })),
+
+      recordDialoguePractice: (dialogueId, mode) => set(s => {
+        const prev = s.dialogueProgress?.[dialogueId] ?? {
+          completed: false,
+          practiceCount: 0,
+          modeCounts: {},
+        };
+        return {
+          dialogueProgress: {
+            ...(s.dialogueProgress ?? {}),
+            [dialogueId]: {
+              ...prev,
+              practiceCount: prev.practiceCount + 1,
+              lastMode: mode,
+              modeCounts: {
+                ...prev.modeCounts,
+                [mode]: (prev.modeCounts[mode] ?? 0) + 1,
+              },
+              lastPracticedAt: new Date().toISOString(),
+            },
+          },
+        };
+      }),
+
+      completeDialogue: (dialogueId) => set(s => {
+        const prev = s.dialogueProgress?.[dialogueId] ?? {
+          completed: false,
+          practiceCount: 0,
+          modeCounts: {},
+        };
+        return {
+          dialogueProgress: {
+            ...(s.dialogueProgress ?? {}),
+            [dialogueId]: {
+              ...prev,
+              completed: true,
+              completedAt: new Date().toISOString(),
+            },
+          },
+        };
+      }),
+
+      recordIntermediateReadingRead: (lessonId) => set(s => {
+        const prev = s.intermediateReadingProgress?.[lessonId] ?? emptyIntermediateReadingProgress();
+        if (prev.read) return {};
+        return {
+          intermediateReadingProgress: {
+            ...(s.intermediateReadingProgress ?? {}),
+            [lessonId]: {
+              ...prev,
+              read: true,
+              readAt: new Date().toISOString(),
+              lastPracticedAt: new Date().toISOString(),
+            },
+          },
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "intermediate_reading_read",
+              result: "success",
+              metadata: { lessonId },
+            }),
+          ],
+        };
+      }),
+
+      recordIntermediateListeningPractice: (lessonId, shadowing = false) => set(s => {
+        const prev = s.intermediateReadingProgress?.[lessonId] ?? emptyIntermediateReadingProgress();
+        return {
+          intermediateReadingProgress: {
+            ...(s.intermediateReadingProgress ?? {}),
+            [lessonId]: {
+              ...prev,
+              listenCount: prev.listenCount + 1,
+              shadowingCount: prev.shadowingCount + (shadowing ? 1 : 0),
+              lastPracticedAt: new Date().toISOString(),
+            },
+          },
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "intermediate_listening_practice",
+              result: "success",
+              metadata: { lessonId, shadowing },
+            }),
+          ],
+        };
+      }),
+
+      completeIntermediateReading: (lessonId, quizCorrect) => set(s => {
+        const prev = s.intermediateReadingProgress?.[lessonId] ?? emptyIntermediateReadingProgress();
+        return {
+          intermediateReadingProgress: {
+            ...(s.intermediateReadingProgress ?? {}),
+            [lessonId]: {
+              ...prev,
+              read: true,
+              readAt: prev.readAt ?? new Date().toISOString(),
+              completed: true,
+              completedAt: new Date().toISOString(),
+              quizCorrect,
+              lastPracticedAt: new Date().toISOString(),
+            },
+          },
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "intermediate_reading_complete",
+              result: quizCorrect === false ? "skip" : "success",
+              metadata: { lessonId, quizCorrect: quizCorrect ?? false },
+            }),
+          ],
+        };
+      }),
+
+      recordAdvancedArticleRead: (articleId) => set(s => {
+        const prev = s.advancedArticleProgress?.[articleId] ?? emptyAdvancedArticleProgress();
+        return {
+          advancedArticleProgress: {
+            ...(s.advancedArticleProgress ?? {}),
+            [articleId]: {
+              ...prev,
+              read: true,
+              readAt: prev.readAt ?? new Date().toISOString(),
+            },
+          },
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "advanced_article_read",
+              result: "success",
+              metadata: { articleId },
+            }),
+          ],
+        };
+      }),
+
+      saveAdvancedArticleDraft: (articleId, draft) => set(s => {
+        const prev = s.advancedArticleProgress?.[articleId] ?? emptyAdvancedArticleProgress();
+        return {
+          advancedArticleProgress: {
+            ...(s.advancedArticleProgress ?? {}),
+            [articleId]: {
+              ...prev,
+              ...draft,
+            },
+          },
+        };
+      }),
+
+      saveAdvancedDebateNote: (articleId, debate) => set(s => {
+        const prev = s.advancedArticleProgress?.[articleId] ?? emptyAdvancedArticleProgress();
+        return {
+          advancedArticleProgress: {
+            ...(s.advancedArticleProgress ?? {}),
+            [articleId]: {
+              ...prev,
+              ...debate,
+            },
+          },
+        };
+      }),
+
+      saveAdvancedWritingFeedback: (articleId, feedback) => set(s => {
+        const prev = s.advancedArticleProgress?.[articleId] ?? emptyAdvancedArticleProgress();
+        const nextFeedback: AdvancedWritingFeedback = {
+          ...feedback,
+          id: `awf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+        };
+        return {
+          advancedArticleProgress: {
+            ...(s.advancedArticleProgress ?? {}),
+            [articleId]: {
+              ...prev,
+              writingFeedbackHistory: [nextFeedback, ...(prev.writingFeedbackHistory ?? [])].slice(0, 10),
+            },
+          },
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "advanced_writing_feedback",
+              result: "success",
+              metadata: {
+                articleId,
+                source: nextFeedback.source,
+                score: nextFeedback.score ?? -1,
+                wordCount: nextFeedback.wordCount,
+              },
+            }),
+          ],
+        };
+      }),
+
+      recordAdvancedSpeakingPractice: (articleId, attempt) => set(s => {
+        const prev = s.advancedArticleProgress?.[articleId] ?? emptyAdvancedArticleProgress();
+        const nextAttempt = attempt ? {
+          ...attempt,
+          id: `asa-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+        } satisfies AdvancedSpeakingAttempt : undefined;
+        return {
+          advancedArticleProgress: {
+            ...(s.advancedArticleProgress ?? {}),
+            [articleId]: {
+              ...prev,
+              speakingPracticeCount: (prev.speakingPracticeCount ?? 0) + 1,
+              speakingAttempts: nextAttempt
+                ? [nextAttempt, ...(prev.speakingAttempts ?? [])].slice(0, 10)
+                : (prev.speakingAttempts ?? []),
+              lastPracticedAt: new Date().toISOString(),
+            },
+          },
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "advanced_speaking_practice",
+              result: "success",
+              metadata: { articleId },
+            }),
+          ],
+        };
+      }),
+
+      completeAdvancedArticle: (articleId) => set(s => {
+        const prev = s.advancedArticleProgress?.[articleId] ?? emptyAdvancedArticleProgress();
+        return {
+          advancedArticleProgress: {
+            ...(s.advancedArticleProgress ?? {}),
+            [articleId]: {
+              ...prev,
+              read: true,
+              completed: true,
+              completedAt: new Date().toISOString(),
+            },
+          },
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "advanced_article_complete",
+              result: "success",
+              metadata: { articleId },
+            }),
+          ],
+        };
+      }),
 
       recordCardView: (lessonId, cardOrder, total) => set(s => {
         const lp = s.lessonProgress[lessonId] ?? { completed: false, lastViewedCardOrder: 0 };
@@ -341,6 +644,25 @@ function createSignal(signal: Omit<LearningSignal, "id" | "at" | "timeBand"> & P
 
 function emptyRecommendationFeedback(suggestionId: string): RecommendationFeedback {
   return { suggestionId, shown: 0, clicked: 0, dismissed: 0 };
+}
+
+function emptyIntermediateReadingProgress(): UserState["intermediateReadingProgress"][string] {
+  return {
+    read: false,
+    completed: false,
+    listenCount: 0,
+    shadowingCount: 0,
+  };
+}
+
+function emptyAdvancedArticleProgress(): UserState["advancedArticleProgress"][string] {
+  return {
+    read: false,
+    completed: false,
+    writingFeedbackHistory: [],
+    speakingPracticeCount: 0,
+    speakingAttempts: [],
+  };
 }
 
 function normalizeEn(en: string): string {

@@ -3,7 +3,7 @@ import * as recorder from "../lib/recorder";
 import { speak, waitForTtsIdle } from "../lib/tts";
 import { useStore } from "../lib/store";
 
-export function ShadowingRecorder({ text }: { text: string }) {
+export function ShadowingRecorder({ text, title = "쉐도잉" }: { text: string; title?: string }) {
   const [supported] = useState(() => recorder.recordingSupported());
   const [recording, setRecording] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export function ShadowingRecorder({ text }: { text: string }) {
 
   return (
     <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3 flex flex-col gap-2">
-      <div className="text-xs text-text-muted">쉐도잉</div>
+      <div className="text-xs text-text-muted">{title}</div>
       <div className="flex gap-2">
         <button
           onClick={toggleRecording}

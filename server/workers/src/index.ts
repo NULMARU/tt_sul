@@ -77,7 +77,242 @@ Use the learner signals to:
 - suggest 3-5 practical expressions and one short original reading passage
 Respond ONLY as JSON:
 {"title":"...","rationale":"...","retirePhraseIds":["..."],"reinforcePhraseIds":["..."],"phrases":[{"en":"...","ko":"...","reason":"...","exampleEn":"...","exampleKo":"...","tags":["..."]}],"story":{"title":"...","body":"...","phraseEns":["..."]}}`,
+
+  advanced_current_topic: `You are a curriculum editor creating advanced English-learning content for Korean adult learners.
+Use ONLY the provided source headlines/summaries as trend signals. Do not quote or paraphrase any article closely. Create an original educational article.
+The output must fit this app schema and be useful for reading, debate, writing, and one-minute speaking practice.
+Requirements:
+- English body: 4 short paragraphs, 170-230 words total.
+- Korean fields should be concise and natural.
+- Choose category from: work, news, society.
+- Include 4 key expressions.
+- Include one debate question with stanceA, stanceB, and 3 useful frames.
+- Include writingPrompt, speakingPrompt, sampleAnswer.
+- Include 4 rubric items with criteria exactly: clarity, structure, evidence, delivery.
+- Do not invent specific facts beyond the source signals. Keep claims cautious.
+Respond ONLY as JSON:
+{"category":"news","title":"...","subtitle":"...","summaryKo":"...","estimatedMinutes":8,"interestTags":["..."],"trendLabelKo":"...","sourceNoteKo":"...","body":"...","keyExpressions":[{"en":"...","ko":"...","usage":"..."}],"debate":{"question":"...","stanceA":"...","stanceB":"...","usefulFrames":["...","...","..."]},"writingPrompt":"...","speakingPrompt":"...","sampleAnswer":"...","rubric":[{"criterion":"clarity","label":"명확성","description":"..."},{"criterion":"structure","label":"구조","description":"..."},{"criterion":"evidence","label":"근거","description":"..."},{"criterion":"delivery","label":"전달","description":"..."}]}`,
 } as const;
+
+type NewsSource = {
+  id: string;
+  label: string;
+  url: string;
+  topics: string[];
+};
+
+type NewsItem = {
+  source: string;
+  title: string;
+  url: string;
+  publishedAt?: string;
+  summary?: string;
+};
+
+const NEWS_SOURCES: NewsSource[] = [
+  {
+    id: "nasa-news",
+    label: "NASA News Releases",
+    url: "https://www.nasa.gov/news-release/feed/",
+    topics: ["우주산업", "환경"],
+  },
+  {
+    id: "nasa-technology",
+    label: "NASA Technology",
+    url: "https://www.nasa.gov/technology/feed/",
+    topics: ["우주산업", "기술/AI"],
+  },
+  {
+    id: "esa-space-news",
+    label: "ESA Space News",
+    url: "https://www.esa.int/rssfeed/Our_Activities/Space_News",
+    topics: ["우주산업"],
+  },
+  {
+    id: "mit-ai",
+    label: "MIT News Artificial Intelligence",
+    url: "https://news.mit.edu/rss/topic/artificial-intelligence2",
+    topics: ["기술/AI", "교육", "업무"],
+  },
+  {
+    id: "mit-climate",
+    label: "MIT News Climate and Sustainability",
+    url: "https://news.mit.edu/rss/topic/climate-change-and-sustainability",
+    topics: ["환경", "건강", "도시생활"],
+  },
+  {
+    id: "mit-management",
+    label: "MIT News Business and Management",
+    url: "https://news.mit.edu/rss/topic/business-management",
+    topics: ["업무", "경제/소비"],
+  },
+  {
+    id: "mit-education",
+    label: "MIT News Education",
+    url: "https://news.mit.edu/rss/topic/education-teaching-online-learning",
+    topics: ["교육", "기술/AI"],
+  },
+  {
+    id: "bbc-world",
+    label: "BBC News World",
+    url: "https://feeds.bbci.co.uk/news/world/rss.xml",
+    topics: ["글로벌 트렌드", "국제뉴스", "사회", "정치"],
+  },
+  {
+    id: "bbc-business",
+    label: "BBC News Business",
+    url: "https://feeds.bbci.co.uk/news/business/rss.xml",
+    topics: ["경제/소비", "업무", "비즈니스"],
+  },
+  {
+    id: "bbc-technology",
+    label: "BBC News Technology",
+    url: "https://feeds.bbci.co.uk/news/technology/rss.xml",
+    topics: ["기술/AI", "업무"],
+  },
+  {
+    id: "bbc-science-environment",
+    label: "BBC News Science & Environment",
+    url: "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+    topics: ["환경", "기술/AI", "건강"],
+  },
+  {
+    id: "guardian-world",
+    label: "The Guardian World",
+    url: "https://www.theguardian.com/world/rss",
+    topics: ["글로벌 트렌드", "국제뉴스", "사회", "정치"],
+  },
+  {
+    id: "guardian-long-read",
+    label: "The Guardian Long Read",
+    url: "https://www.theguardian.com/news/series/the-long-read/rss",
+    topics: ["글로벌 트렌드", "사회", "환경", "경제/소비", "교육"],
+  },
+  {
+    id: "guardian-business",
+    label: "The Guardian Business",
+    url: "https://www.theguardian.com/business/rss",
+    topics: ["경제/소비", "업무", "비즈니스"],
+  },
+  {
+    id: "guardian-technology",
+    label: "The Guardian Technology",
+    url: "https://www.theguardian.com/technology/rss",
+    topics: ["기술/AI", "업무"],
+  },
+  {
+    id: "guardian-environment",
+    label: "The Guardian Environment",
+    url: "https://www.theguardian.com/environment/rss",
+    topics: ["환경", "사회"],
+  },
+  {
+    id: "nyt-world",
+    label: "The New York Times World",
+    url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+    topics: ["글로벌 트렌드", "국제뉴스", "사회", "정치"],
+  },
+  {
+    id: "nyt-business",
+    label: "The New York Times Business",
+    url: "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+    topics: ["경제/소비", "업무", "비즈니스"],
+  },
+  {
+    id: "nyt-technology",
+    label: "The New York Times Technology",
+    url: "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
+    topics: ["기술/AI", "업무"],
+  },
+  {
+    id: "reddit-worldnews",
+    label: "Reddit r/worldnews",
+    url: "https://www.reddit.com/r/worldnews/.rss",
+    topics: ["글로벌 트렌드", "커뮤니티", "국제뉴스", "사회"],
+  },
+  {
+    id: "reddit-futurology",
+    label: "Reddit r/Futurology",
+    url: "https://www.reddit.com/r/Futurology/.rss",
+    topics: ["글로벌 트렌드", "커뮤니티", "기술/AI", "환경"],
+  },
+  {
+    id: "scmp-asia",
+    label: "South China Morning Post Asia",
+    url: "https://www.scmp.com/rss/3/feed",
+    topics: ["아시아", "국제뉴스", "사회", "정치"],
+  },
+  {
+    id: "scmp-china",
+    label: "South China Morning Post China",
+    url: "https://www.scmp.com/rss/4/feed",
+    topics: ["아시아", "국제뉴스", "정치", "경제/소비"],
+  },
+  {
+    id: "scmp-world",
+    label: "South China Morning Post World",
+    url: "https://www.scmp.com/rss/5/feed",
+    topics: ["글로벌 트렌드", "국제뉴스", "사회"],
+  },
+  {
+    id: "scmp-tech",
+    label: "South China Morning Post Tech",
+    url: "https://www.scmp.com/rss/36/feed",
+    topics: ["아시아", "기술/AI", "경제/소비"],
+  },
+  {
+    id: "scmp-business",
+    label: "South China Morning Post Business",
+    url: "https://www.scmp.com/rss/92/feed",
+    topics: ["아시아", "경제/소비", "비즈니스", "업무"],
+  },
+  {
+    id: "straits-times-asia",
+    label: "The Straits Times Asia",
+    url: "https://www.straitstimes.com/news/asia/rss.xml",
+    topics: ["아시아", "국제뉴스", "사회", "정치"],
+  },
+  {
+    id: "straits-times-world",
+    label: "The Straits Times World",
+    url: "https://www.straitstimes.com/news/world/rss.xml",
+    topics: ["글로벌 트렌드", "국제뉴스", "사회"],
+  },
+  {
+    id: "straits-times-business",
+    label: "The Straits Times Business",
+    url: "https://www.straitstimes.com/news/business/rss.xml",
+    topics: ["아시아", "경제/소비", "비즈니스", "업무"],
+  },
+  {
+    id: "the-hindu-international",
+    label: "The Hindu International",
+    url: "https://www.thehindu.com/news/international/feeder/default.rss",
+    topics: ["아시아", "국제뉴스", "사회", "정치"],
+  },
+  {
+    id: "the-hindu-sci-tech",
+    label: "The Hindu Sci-Tech",
+    url: "https://www.thehindu.com/sci-tech/feeder/default.rss",
+    topics: ["아시아", "기술/AI", "환경", "건강"],
+  },
+  {
+    id: "the-hindu-business",
+    label: "The Hindu Business",
+    url: "https://www.thehindu.com/business/feeder/default.rss",
+    topics: ["아시아", "경제/소비", "비즈니스", "업무"],
+  },
+];
+
+const DEFAULT_NEWS_SOURCE_IDS = [
+  "bbc-world",
+  "guardian-world",
+  "nyt-world",
+  "reddit-worldnews",
+  "mit-ai",
+];
+const NEWS_SOURCE_CACHE_PREFIX = "news-src:v2:";
+const ADVANCED_CURRENT_CACHE_PREFIX = "adv-current:v2:";
 
 // ─── Helpers ──────────────────────────────────────────────
 function corsHeaders(origin: string | null): Record<string, string> {
@@ -174,6 +409,120 @@ function normalizeJsonText(text: string, fallback: string): string {
   } catch {
     return fallback;
   }
+}
+
+function stripHtml(text: string): string {
+  return decodeXml(text)
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function decodeXml(text: string): string {
+  return text
+    .replace(/<!\[CDATA\[(.*?)\]\]>/gs, "$1")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_m, code) => String.fromCharCode(Number(code)));
+}
+
+function extractTag(block: string, tag: string): string {
+  const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return stripHtml(match?.[1] ?? "");
+}
+
+function parseFeedItems(xml: string, source: NewsSource): NewsItem[] {
+  const itemBlocks = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)].map(match => match[0]);
+  const entryBlocks = itemBlocks.length > 0
+    ? []
+    : [...xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi)].map(match => match[0]);
+  const blocks = itemBlocks.length > 0 ? itemBlocks : entryBlocks;
+
+  return blocks.slice(0, 8).map(block => {
+    const atomLink = block.match(/<link[^>]+href=["']([^"']+)["'][^>]*>/i)?.[1] ?? "";
+    const title = extractTag(block, "title");
+    const url = extractTag(block, "link") || decodeXml(atomLink);
+    const publishedAt = extractTag(block, "pubDate") || extractTag(block, "updated") || extractTag(block, "published") || undefined;
+    const summary = extractTag(block, "description") || extractTag(block, "summary") || extractTag(block, "content:encoded") || undefined;
+    return {
+      source: source.label,
+      title,
+      url,
+      publishedAt,
+      summary: summary ? summary.slice(0, 240) : undefined,
+    };
+  }).filter(item => item.title && item.url);
+}
+
+function normalizeTopic(topic: string): string {
+  return topic.toLowerCase().replace(/\s+/g, "").trim();
+}
+
+function selectNewsSources(topics: string[]): NewsSource[] {
+  const normalizedTopics = topics.map(normalizeTopic);
+  const selected = NEWS_SOURCES
+    .map((source, index) => ({
+      source,
+      index,
+      score: source.topics.reduce(
+        (sum, topic) => sum + (normalizedTopics.includes(normalizeTopic(topic)) ? 1 : 0),
+        0,
+      ),
+    }))
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(item => item.source);
+  if (selected.length > 0) return selected.slice(0, 5);
+
+  const fallback = DEFAULT_NEWS_SOURCE_IDS
+    .map(id => NEWS_SOURCES.find(source => source.id === id))
+    .filter((source): source is NewsSource => Boolean(source));
+  return fallback.slice(0, 5);
+}
+
+async function fetchNewsItemsForTopics(env: Env, topics: string[]): Promise<{ items: NewsItem[]; sources: NewsSource[]; cached: boolean }> {
+  const sources = selectNewsSources(topics);
+  const cacheKey = NEWS_SOURCE_CACHE_PREFIX + (await sha256Hex(sources.map(source => source.id).sort().join("|")));
+  const cached = await env.CACHE.get(cacheKey);
+  if (cached) {
+    try {
+      return { items: JSON.parse(cached) as NewsItem[], sources, cached: true };
+    } catch {
+      // Ignore malformed cache and refresh below.
+    }
+  }
+
+  const results = await Promise.all(sources.map(async source => {
+    try {
+      const res = await fetch(source.url, {
+        headers: { "user-agent": "sulsul-plus-learning-bot/0.1" },
+      });
+      if (!res.ok) return [] as NewsItem[];
+      const xml = await res.text();
+      return parseFeedItems(xml, source);
+    } catch {
+      return [] as NewsItem[];
+    }
+  }));
+
+  const seen = new Set<string>();
+  const items: NewsItem[] = [];
+  for (let index = 0; index < 8 && items.length < 12; index += 1) {
+    for (const sourceItems of results) {
+      const item = sourceItems[index];
+      if (!item) continue;
+      const key = `${item.source}|${item.title}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push(item);
+      if (items.length >= 12) break;
+    }
+  }
+  await env.CACHE.put(cacheKey, JSON.stringify(items), { expirationTtl: 60 * 60 });
+  return { items, sources, cached: false };
 }
 
 // ─── Route handlers ──────────────────────────────────────
@@ -430,6 +779,113 @@ async function handleContentSuggestions(req: Request, env: Env, origin: string |
   });
 }
 
+async function handleAdvancedCurrentTopic(req: Request, env: Env, origin: string | null): Promise<Response> {
+  let body: any;
+  try { body = await req.json(); }
+  catch { return json({ error: "invalid_json" }, 400, origin); }
+
+  const topics = Array.isArray(body.topics)
+    ? body.topics.map((topic: unknown) => String(topic).trim()).filter(Boolean).slice(0, 8)
+    : [];
+  const recentJournal = Array.isArray(body.recentJournal)
+    ? body.recentJournal.map((entry: unknown) => String(entry).trim()).filter(Boolean).slice(0, 5)
+    : [];
+  const existingTitles = Array.isArray(body.existingTitles)
+    ? body.existingTitles.map((title: unknown) => String(title).trim()).filter(Boolean).slice(0, 20)
+    : [];
+
+  if (topics.length === 0 && recentJournal.length === 0) {
+    return json({ error: "missing_topics", message: "topics or recentJournal is required" }, 400, origin);
+  }
+
+  const news = await fetchNewsItemsForTopics(env, topics);
+  if (news.items.length === 0) {
+    return json({ error: "news_sources_unavailable", sources: news.sources.map(source => source.label) }, 502, origin);
+  }
+
+  const sourceBrief = news.items.slice(0, 8).map((item, index) => ({
+    n: index + 1,
+    source: item.source,
+    title: item.title,
+    publishedAt: item.publishedAt ?? "",
+    summary: item.summary ?? "",
+    url: item.url,
+  }));
+  const payload = JSON.stringify({
+    topics,
+    recentJournal,
+    existingTitles,
+    today: new Date().toISOString().slice(0, 10),
+    sourceBrief,
+  });
+  if (payload.length > 9000) return json({ error: "payload_too_long", limit: 9000 }, 400, origin);
+
+  const cacheKey = ADVANCED_CURRENT_CACHE_PREFIX + (await sha256Hex(payload));
+  const cached = await env.CACHE.get(cacheKey);
+  if (cached) {
+    return new Response(cached, {
+      headers: { "content-type": "application/json", "x-cache": "hit", ...corsHeaders(origin) },
+    });
+  }
+
+  const reqBody = {
+    model: MODEL,
+    max_tokens: 1700,
+    system: [{ type: "text", text: SYSTEM_PROMPTS.advanced_current_topic, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: payload }],
+  };
+
+  const res = await callAnthropic(env, reqBody);
+  let text = "";
+  let source = "anthropic";
+  if (!res.ok) {
+    const fb = await callGemini(env, `${SYSTEM_PROMPTS.advanced_current_topic}\n\nInput JSON:\n${payload}`);
+    if (!fb.ok) return json({ error: "llm_unavailable", anthropic_status: res.status }, 502, origin);
+    text = fb.text;
+    source = "gemini";
+  } else {
+    const data = (await res.json()) as any;
+    text = data?.content?.[0]?.text ?? "{}";
+  }
+
+  const draft = JSON.parse(normalizeJsonText(text, "{}")) as any;
+  const now = new Date().toISOString();
+  const article = {
+    id: `adv-live-${await sha256Hex(`${now}|${draft.title ?? topics.join("-")}`)}`.slice(0, 24),
+    languageId: "en",
+    levelId: "advanced",
+    generatedAt: now,
+    isGenerated: true,
+    category: ["work", "news", "society"].includes(draft.category) ? draft.category : "news",
+    interestTags: Array.isArray(draft.interestTags) ? draft.interestTags.slice(0, 8).map(String) : topics,
+    trendLabelKo: String(draft.trendLabelKo ?? "최신 맞춤 이슈"),
+    sourceNoteKo: String(draft.sourceNoteKo ?? "공식 RSS/뉴스 소스의 최신 제목과 요약을 바탕으로 원문을 인용하지 않고 학습용으로 재구성했습니다."),
+    sourceItems: news.items.slice(0, 4).map(item => ({
+      source: item.source,
+      title: item.title,
+      url: item.url,
+      publishedAt: item.publishedAt,
+    })),
+    title: String(draft.title ?? "A Current Issue Worth Discussing"),
+    subtitle: String(draft.subtitle ?? "최신 주제를 바탕으로 의견을 말해봅니다."),
+    summaryKo: String(draft.summaryKo ?? ""),
+    estimatedMinutes: Number(draft.estimatedMinutes ?? 8),
+    body: String(draft.body ?? ""),
+    keyExpressions: Array.isArray(draft.keyExpressions) ? draft.keyExpressions.slice(0, 4) : [],
+    debate: draft.debate ?? { question: "", stanceA: "", stanceB: "", usefulFrames: [] },
+    writingPrompt: String(draft.writingPrompt ?? ""),
+    speakingPrompt: String(draft.speakingPrompt ?? ""),
+    sampleAnswer: String(draft.sampleAnswer ?? ""),
+    rubric: Array.isArray(draft.rubric) ? draft.rubric.slice(0, 4) : [],
+  };
+
+  const out = JSON.stringify({ article, sourceItems: article.sourceItems, cachedSources: news.cached, modelSource: source });
+  await env.CACHE.put(cacheKey, out, { expirationTtl: 12 * 60 * 60 });
+  return new Response(out, {
+    headers: { "content-type": "application/json", "x-cache": "miss", "x-source": source, ...corsHeaders(origin) },
+  });
+}
+
 // ─── /test endpoint — minimum LLM probe ──────────────────
 async function handleTest(env: Env, origin: string | null): Promise<Response> {
   const t0 = Date.now();
@@ -509,6 +965,9 @@ export default {
       }
       if (url.pathname === "/content-suggestions" && req.method === "POST") {
         return await handleContentSuggestions(req, env, origin);
+      }
+      if (url.pathname === "/advanced-current-topic" && req.method === "POST") {
+        return await handleAdvancedCurrentTopic(req, env, origin);
       }
     } catch (e: any) {
       return json({ error: "server_error", message: String(e?.message ?? e) }, 500, origin);
