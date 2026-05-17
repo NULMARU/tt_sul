@@ -17,6 +17,7 @@
 | 5 | 상급 전용 표현 퀴즈 생성기 추가 | [src/data/advanced-quizzes.ts](../src/data/advanced-quizzes.ts) |
 | 6 | 하단 메뉴 순서를 `오늘 → 1분학습 → 메모리맵 → 도구`로 변경 | [web/src/components/BottomBar.tsx](../web/src/components/BottomBar.tsx) |
 | 7 | 상급 객관식 보기에서 정답이 빠질 수 있던 회전 로직 수정 | [src/data/advanced-quizzes.ts](../src/data/advanced-quizzes.ts) |
+| 8 | 배포본에서 이전 PWA 화면이 남지 않도록 서비스워커 즉시 갱신 설정 추가 | [web/vite.config.ts](../web/vite.config.ts), [web/src/main.tsx](../web/src/main.tsx) |
 
 ### 설계 메모
 
@@ -33,6 +34,7 @@
 - ✅ 브라우저 QA: 중급 선택 후 홈에서 중급 대화/리딩 추천 표시 확인
 - ✅ 브라우저 QA: 중급 1분학습에서 중급 대화 문제 표시 확인
 - ✅ 브라우저 콘솔 오류 0건
+- ✅ 배포 QA 중 PWA 캐시가 이전 화면을 유지하는 문제 확인 후 즉시 갱신 설정 보강
 - ✅ QA 스크린샷 저장: [37-course-aware-home-advanced.png](qa-screens/37-course-aware-home-advanced.png), [38-course-aware-review-advanced.png](qa-screens/38-course-aware-review-advanced.png), [39-course-aware-review-intermediate.png](qa-screens/39-course-aware-review-intermediate.png)
 
 ## 🌙 세션 #12 — 중급 뉴스형 리딩/리스닝 랩 추가 + 영어 앱 마감 QA
