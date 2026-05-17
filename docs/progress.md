@@ -4,6 +4,36 @@
 
 ---
 
+## 🌙 세션 #14 — 과정별 메모리맵 분리 + 낙서장 기반 동적 지도
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | `메모리맵`을 현재 선택 과정별로 분기 | [web/src/routes/MemoryMap.tsx](../web/src/routes/MemoryMap.tsx) |
+| 2 | 초급은 기존 Phrase Memory Map 유지 | [web/src/routes/MemoryMap.tsx](../web/src/routes/MemoryMap.tsx) |
+| 3 | 중급은 대화 암송 지도 + 리딩·리스닝 지도 표시 | [web/src/routes/MemoryMap.tsx](../web/src/routes/MemoryMap.tsx) |
+| 4 | 상급은 Article & Debate 기억 지도 표시 | [web/src/routes/MemoryMap.tsx](../web/src/routes/MemoryMap.tsx) |
+| 5 | 낙서장 관심 주제와 생활 패턴으로 중급/상급 카드 정렬 및 `맞춤` 표시 | [web/src/routes/MemoryMap.tsx](../web/src/routes/MemoryMap.tsx) |
+| 6 | 대화 연습/퀴즈, 리딩 듣기·쉐도잉·퀴즈, 상급 작문·발화 이력을 지도에 반영 | [web/src/routes/MemoryMap.tsx](../web/src/routes/MemoryMap.tsx) |
+
+### 설계 메모
+
+- 중급 메모리맵은 `DIALOGUE_LESSONS`, `INTERMEDIATE_READING_LESSONS`, 사용자 진행률, 퀴즈 기록을 사용합니다.
+- 상급 메모리맵은 기본 상급 글과 생성된 최신 주제 글을 합쳐 보여주고, 낙서장 기반 맞춤 추천 순서를 유지합니다.
+- 낙서장에 `우주산업`, `기술/AI`, `업무`, `여행`, `시사 토론` 같은 신호가 있으면 관련 카드가 위로 올라옵니다.
+- 메모리 상태는 과정별로 다르게 계산합니다: 초급은 SRS 기억강도, 중급은 연습/완료/퀴즈 이력, 상급은 읽기/작문피드백/발화/완료 이력입니다.
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+- ✅ 브라우저 QA: 상급 선택 후 메모리맵에서 Stage 3 Article & Debate 지도 표시 확인
+- ✅ 브라우저 QA: 상급 메모리맵에서 낙서장 우주산업 신호가 우주 관련 글을 상단 맞춤 카드로 올리는 것 확인
+- ✅ 브라우저 QA: 중급 선택 후 메모리맵에서 Stage 2 대화/리딩 지도 표시 확인
+- ✅ 브라우저 QA: 중급 메모리맵에서 우주산업 신호가 `A Small Satellite With a Big Job`을 맞춤 리딩으로 올리는 것 확인
+- ✅ 브라우저 콘솔 오류 0건
+- ✅ QA 스크린샷 저장: [40-memory-map-advanced.png](qa-screens/40-memory-map-advanced.png), [41-memory-map-intermediate.png](qa-screens/41-memory-map-intermediate.png)
+
 ## 🌙 세션 #13 — 과정별 오늘/1분학습 분리 + 하단 메뉴 순서 수정
 
 ### ✅ 이 세션에서 완료된 것
