@@ -63,4 +63,7 @@ export default defineConfig({
       allow: [path.resolve(__dirname, ".."), path.resolve(__dirname)],
     },
   },
+  optimizeDeps: {
+    exclude: ["onnxruntime-web"],
+  },
 });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
 import { llmAvailable, llmProxyUrl, probeHealth, probeTest, suggestContentUpdate, type HealthResult } from "../lib/llm";
@@ -10,8 +10,13 @@ import {
   SUPERTONIC_GITHUB_URL,
   SUPERTONIC_MODEL_LICENSE_URL,
   SUPERTONIC_MODEL_URL,
+  clearSupertonicAssets,
+  prepareSupertonicAssets,
+  supertonicAssetStatus,
   supertonicNoticeItems,
   supertonicRuntimeStatus,
+  type SupertonicAssetStatus,
+  type SupertonicPrepareProgress,
 } from "../lib/supertonic-tts";
 import { speak } from "../lib/tts";
 import { PHRASE_BY_ID } from "@shared/data/phrases.seed";
@@ -339,6 +344,21 @@ function TtsProviderSection() {
   const supertonicEnabled = provider === "supertonic";
   const consentCurrent = prefs.supertonicTtsConsentVersion === SUPERTONIC_CONSENT_VERSION && !!prefs.supertonicTtsAcceptedAt;
   const safeModeActive = supertonicEnabled && consentCurrent;
+  const [assetStatus, setAssetStatus] = useState<SupertonicAssetStatus | null>(null);
+  const [prepareProgress, setPrepareProgress] = useState<SupertonicPrepareProgress | null>(null);
+  const [busy, setBusy] = useState<"status" | "prepare" | "clear" | "test" | null>(null);
+  const [message, setMessage] = useState("");
+  const estimatedMb = assetStatus
+    ? Math.round(assetStatus.estimatedBytes / 1024 / 1024)
+    : SUPERTONIC_ESTIMATED_MODEL_MB;
+
+  useEffect(() => {
+    let mounted = true;
+    supertonicAssetStatus()
+      .then(next => { if (mounted) setAssetStatus(next); })
+      .catch(error => { if (mounted) setMessage(error instanceof Error ? error.message : String(error)); });
+    return () => { mounted = false; };
+  }, [prefs.supertonicTtsAssetsCachedAt, prefs.supertonicTtsLastError]);
 
   function enableSupertonic() {
     setPrefs({
@@ -354,6 +374,67 @@ function TtsProviderSection() {
       supertonicTtsAcceptedAt: undefined,
       supertonicTtsConsentVersion: undefined,
     });
+  }
+
+  async function refreshAssetStatus() {
+    setBusy("status");
+    setMessage("");
+    try {
+      setAssetStatus(await supertonicAssetStatus());
+      setMessage("캐시 상태를 확인했습니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function prepareAssets() {
+    if (!safeModeActive) {
+      setMessage("먼저 Supertonic 준비를 선택하고 조건을 확인해주세요.");
+      return;
+    }
+    setBusy("prepare");
+    setMessage("");
+    try {
+      const next = await prepareSupertonicAssets(progress => setPrepareProgress(progress));
+      setAssetStatus(next);
+      setMessage("모델 캐시 준비가 끝났습니다. 이제 테스트 문장은 Supertonic을 먼저 시도합니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPrepareProgress(null);
+      setBusy(null);
+    }
+  }
+
+  async function clearAssets() {
+    setBusy("clear");
+    setMessage("");
+    try {
+      await clearSupertonicAssets();
+      setAssetStatus(await supertonicAssetStatus());
+      setMessage("Supertonic 모델 캐시를 삭제했습니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function testTts() {
+    setBusy("test");
+    setMessage("");
+    try {
+      await speak("A small satellite can do a big job.", { rate: prefs.ttsRate });
+      setMessage(assetStatus?.cached && safeModeActive
+        ? "테스트 재생이 끝났습니다. 실패한 경우에는 시스템 TTS로 자동 전환됩니다."
+        : "테스트 재생이 끝났습니다. 모델 캐시 전에는 시스템 TTS로 재생됩니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -390,17 +471,83 @@ function TtsProviderSection() {
             {supertonicNoticeItems().map(item => <li key={item}>{item}</li>)}
           </ul>
           <p className="mt-2 text-text-muted">
-            현재 버전은 안전 레일만 활성화합니다. 모델 지연 다운로드/ONNX 어댑터가 연결되기 전까지는 기존 시스템 TTS로 자동 재생됩니다.
+            이 버튼 영역에서 직접 모델 캐시를 준비해야 다운로드가 시작됩니다. 자동 다운로드는 하지 않습니다.
           </p>
         </div>
       )}
 
+      <div className="rounded-xl border border-border bg-surface-2 p-3 text-xs leading-relaxed">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <div className="font-semibold text-text">모델 캐시</div>
+            <div className="text-text-muted">
+              {assetStatus ? `${assetStatus.cachedCount}/${assetStatus.totalCount}개 준비 · 약 ${estimatedMb}MB` : "상태 확인 중"}
+            </div>
+          </div>
+          <span className={`rounded-full border px-2 py-0.5 ${assetStatus?.cached ? "border-success/40 text-success" : "border-border text-text-muted"}`}>
+            {assetStatus?.cached ? "준비됨" : "미준비"}
+          </span>
+        </div>
+        {prepareProgress && (
+          <div className="mt-2 text-text-muted">
+            다운로드/캐시 중: {prepareProgress.label} ({prepareProgress.current}/{prepareProgress.total})
+          </div>
+        )}
+        {assetStatus?.cachedAt && (
+          <div className="mt-2 text-text-muted">
+            캐시 완료: {new Date(assetStatus.cachedAt).toLocaleString()}
+          </div>
+        )}
+        {(assetStatus?.lastError || prefs.supertonicTtsLastError) && (
+          <div className="mt-2 text-error break-all">
+            마지막 오류: {assetStatus?.lastError || prefs.supertonicTtsLastError}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={refreshAssetStatus}
+          disabled={!!busy}
+          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm disabled:opacity-50"
+        >
+          {busy === "status" ? "확인 중…" : "캐시 상태 확인"}
+        </button>
+        <button
+          onClick={prepareAssets}
+          disabled={!safeModeActive || !!busy || assetStatus?.cached}
+          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm disabled:opacity-50"
+        >
+          {busy === "prepare" ? "준비 중…" : "모델 캐시 준비"}
+        </button>
+        <button
+          onClick={clearAssets}
+          disabled={!!busy || !assetStatus?.cachedCount}
+          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-muted disabled:opacity-50"
+        >
+          {busy === "clear" ? "삭제 중…" : "캐시 삭제"}
+        </button>
+        <button
+          onClick={testTts}
+          disabled={!!busy}
+          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm disabled:opacity-50"
+        >
+          {busy === "test" ? "재생 중…" : "테스트 문장 재생"}
+        </button>
+      </div>
+
       <button
-        onClick={() => speak("A small satellite can do a big job.", { rate: prefs.ttsRate })}
+        onClick={() => speak("I can practice English for five minutes a day.", { rate: prefs.ttsRate })}
         className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
       >
-        테스트 문장 재생
+        빠른 기본 재생
       </button>
+
+      {message && (
+        <div className={`text-xs ${message.includes("오류") || message.includes("실패") ? "text-error" : "text-success"}`}>
+          {message}
+        </div>
+      )}
 
       <div className="text-[11px] text-text-muted leading-relaxed">
         참고: <a className="underline" href={SUPERTONIC_GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>

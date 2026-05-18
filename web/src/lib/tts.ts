@@ -1,5 +1,5 @@
 import { useStore } from "./store";
-import { trySpeakWithSupertonic } from "./supertonic-tts";
+import { stopSupertonicAudio, trySpeakWithSupertonic } from "./supertonic-tts";
 
 let activeToken = 0;
 let activeResolve: (() => void) | null = null;
@@ -48,8 +48,11 @@ export async function speak(text: string, opts: { lang?: "en" | "ko"; rate?: num
   useStore.getState().recordTtsPlay(text);
 
   if (useStore.getState().prefs.ttsProvider === "supertonic") {
-    const supertonic = await trySpeakWithSupertonic();
-    if (supertonic.started) return;
+    const supertonic = await trySpeakWithSupertonic(text, opts);
+    if (supertonic.started) {
+      finishToken(token);
+      return;
+    }
   }
 
   if (!ttsSupported()) {
@@ -80,6 +83,7 @@ export function stopSpeak() {
     window.clearTimeout(fallbackTimer);
     fallbackTimer = null;
   }
+  stopSupertonicAudio();
   if (ttsSupported()) speechSynthesis.cancel();
   activeToken += 1;
   activeResolve?.();

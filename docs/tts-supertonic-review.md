@@ -9,8 +9,9 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 ## 비용 판단
 
 - 모델 자체는 호출당 과금되는 클라우드 API가 아니므로, 라이선스 조건을 지키는 범위에서 별도 API 사용료는 발생하지 않습니다.
-- 다만 GitHub Pages 또는 별도 스토리지에서 모델 파일을 제공하면 다운로드 트래픽이 늘 수 있고, 사용자 기기에는 약 404MB 수준의 저장공간과 배터리/성능 부담이 생길 수 있습니다.
-- 현재 구현은 모델 파일을 앱 번들에 포함하지 않고 다운로드도 시작하지 않습니다. 따라서 이 단계에서는 추가 호스팅 트래픽 비용이 발생하지 않습니다.
+- 다만 GitHub Pages 또는 별도 스토리지에서 모델 파일을 제공하면 다운로드 트래픽이 늘 수 있고, 사용자 기기에는 약 398MB 수준의 저장공간과 배터리/성능 부담이 생길 수 있습니다.
+- 현재 구현은 모델 파일을 앱 번들에 포함하지 않고, 사용자가 도구함에서 `모델 캐시 준비`를 누를 때만 Hugging Face 모델 자산을 Cache Storage에 저장합니다. 합성 실행 중 캐시가 없으면 재다운로드하지 않고 시스템 TTS로 fallback합니다.
+- ONNX Runtime Web 실행 파일은 배포 산출물에 포함되지만 PWA 사전 캐시 대상에서는 제외했습니다. Supertonic 합성 경로가 실제로 호출될 때만 런타임 로드를 시도합니다.
 
 ## 적합한 점
 
@@ -21,7 +22,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 
 ## 주의할 점
 
-- 모델 저장소 크기가 약 404MB라 GitHub Pages PWA에 기본 번들로 넣으면 초기 로딩과 저장공간 부담이 큽니다.
+- 모델 저장소 크기가 약 398MB라 GitHub Pages PWA에 기본 번들로 넣으면 초기 로딩과 저장공간 부담이 큽니다.
 - 브라우저 사용은 WebGPU/ONNX Runtime Web 기반이므로 iOS Safari, 구형 Android, 저사양 기기에서 반드시 별도 QA가 필요합니다.
 - Cloudflare Worker 같은 경량 서버리스에 모델을 올려 실시간 TTS API로 운영하기에는 모델 크기와 런타임 제약이 큽니다.
 - 현재 앱의 `web/src/lib/tts.ts`는 Web Speech API 중심이라 Supertonic을 붙이려면 `TtsProvider` 추상화가 필요합니다.
@@ -43,24 +44,27 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 4. 4단계: Supertonic 실패 시 자동으로 기존 Web Speech API로 fallback합니다.
 5. 5단계: 영어에서 먼저 발음 품질, 모바일 성능, 로딩 시간, 캐시 용량을 QA한 뒤 베트남어/일본어로 확장합니다.
 
-## 구현 전 체크리스트
+## 구현 체크리스트
 
 - [x] 기본 TTS 유지 + Supertonic opt-in 설정 레일 추가
 - [x] 모델을 기본 번들에 포함하지 않도록 결정
 - [x] 모델 크기, OpenRAIL-M, 금지 용도, fallback 고지 UI 추가
+- [x] 모델 다운로드 크기, 캐시 상태, 캐시 삭제 UI 추가
+- [x] 모델 지연 다운로드 + Cache Storage 저장 추가
+- [x] ONNX Runtime Web WebGPU 우선, WASM fallback 어댑터 추가
+- [x] Supertonic 실패 시 시스템 TTS fallback 유지
+- [x] Supertonic 모델과 예제 코드, ONNX Runtime Web 고지 문서 추가
 - [ ] OpenRAIL-M 전문을 앱 내부 고지 또는 약관 문서에 포함
-- [ ] “AI/기계 생성 음성” 고지 문구 추가
-- [ ] 모델 다운로드 크기, 캐시 삭제, 오프라인 사용 정책 UI 추가
-- [ ] iOS Safari, Android Chrome, 데스크톱 Chrome에서 WebGPU/성능 QA
-- [ ] Supertonic 모델과 예제 코드의 라이선스 파일을 `THIRD_PARTY_NOTICES`에 포함
+- [ ] “AI/기계 생성 음성” 고지 문구를 사용자-facing 약관/정책으로 분리
+- [ ] iOS Safari, Android Chrome, 데스크톱 Chrome에서 실제 모델 캐시/합성 성능 QA
 - [ ] 동의 없는 음성 복제/사칭을 방지하는 정책 문구 추가
 
 ## 현재 구현 상태
 
-- `web/src/lib/supertonic-tts.ts`: Supertonic 조건 고지, 런타임 감지, opt-in 동의 버전, 시스템 TTS fallback 레일 추가
-- `web/src/lib/tts.ts`: 사용자가 Supertonic 준비 모드를 선택해도 실제 모델 어댑터가 없으면 기존 Web Speech API로 자동 fallback
-- `web/src/routes/Toolbelt.tsx`: 도구함에 TTS 음성 엔진 카드 추가
-- 실제 모델 다운로드/ONNX Runtime 합성은 아직 연결하지 않았습니다. 비용과 호환성 리스크를 피하기 위한 1차 안전 구현입니다.
+- `web/src/lib/supertonic-tts.ts`: Supertonic 조건 고지, 런타임 감지, opt-in 동의 버전, 모델 자산 캐시, WebGPU/WASM ONNX 합성, 시스템 TTS fallback 레일 추가
+- `web/src/lib/tts.ts`: Supertonic 재생 성공 시 오디오 종료까지 TTS 상태를 유지하고, 실패하면 기존 Web Speech API로 자동 fallback
+- `web/src/routes/Toolbelt.tsx`: 도구함에 TTS 음성 엔진 카드, 모델 캐시 상태/준비/삭제/테스트 UI 추가
+- `docs/third-party-notices.md`: Supertonic 예제 코드, Supertonic 3 모델, ONNX Runtime Web 고지 추가
 
 ## 참고 소스
 

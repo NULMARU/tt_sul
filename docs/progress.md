@@ -4,6 +4,30 @@
 
 ---
 
+## 🌙 세션 #19 — Supertonic TTS 실제 캐시/ONNX 어댑터 연결
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | `onnxruntime-web` 의존성 추가 | [web/package.json](../web/package.json), [web/package-lock.json](../web/package-lock.json) |
+| 2 | Supertonic 모델 자산 manifest, 지연 다운로드, Cache Storage 저장/삭제/상태 확인 추가 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
+| 3 | WebGPU 우선, WASM fallback ONNX 합성 어댑터 추가 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
+| 4 | Supertonic 오디오 재생 종료/중지 상태를 기존 TTS 상태 관리와 연결 | [web/src/lib/tts.ts](../web/src/lib/tts.ts) |
+| 5 | 도구함 TTS 카드에 모델 캐시 준비/삭제/상태/테스트 UI 추가 | [web/src/routes/Toolbelt.tsx](../web/src/routes/Toolbelt.tsx) |
+| 6 | Supertonic/ONNX Runtime 고지 문서 추가 | [docs/third-party-notices.md](third-party-notices.md) |
+
+### 설계 메모
+
+- 모델 파일은 여전히 앱 번들에 넣지 않습니다. 사용자가 직접 `모델 캐시 준비`를 누를 때만 Hugging Face에서 약 398MB 자산을 내려받고, 합성 중 캐시가 비어 있으면 재다운로드하지 않고 시스템 TTS로 fallback합니다.
+- ONNX Runtime Web WASM 자산은 배포 산출물에 포함되지만 PWA 사전 캐시 대상은 아닙니다. Supertonic 실행 경로가 호출될 때만 로드를 시도합니다.
+- Supertonic 실패, 미지원 브라우저, 미캐시 상태에서는 기존 시스템 TTS로 자동 fallback합니다.
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+- ⏳ 실제 398MB 모델 다운로드/합성 QA는 사용자가 원할 때 별도 수행 권장
+
 ## 🌙 세션 #18 — Supertonic TTS 안전 도입 레일
 
 ### ✅ 이 세션에서 완료된 것

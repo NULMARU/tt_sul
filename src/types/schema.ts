@@ -701,6 +701,8 @@ export interface UserState {
     ttsProvider: TtsProvider;
     supertonicTtsAcceptedAt?: string;
     supertonicTtsConsentVersion?: string;
+    supertonicTtsAssetsCachedAt?: string;
+    supertonicTtsLastError?: string;
     timeColorAuto: boolean;
     notificationEnabled: boolean;
     notificationTime?: string; // "07:20"
