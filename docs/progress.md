@@ -4,6 +4,27 @@
 
 ---
 
+## 🌙 세션 #22 — 장문 본문듣기 첫 재생 지연 단축 + 중지 제어
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | Supertonic 장문 합성을 전체 WAV 대기 방식에서 조각 단위 우선 재생 방식으로 개선 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
+| 2 | 조각별 음성 캐시를 추가해 같은 글 반복 듣기와 다음 조각 준비를 더 빠르게 처리 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
+| 3 | 중급 리딩 `듣기` 버튼을 재생 중 `중지` 버튼으로 전환 | [web/src/routes/IntermediateReading.tsx](../web/src/routes/IntermediateReading.tsx) |
+| 4 | 상급 글 `본문 듣기` 버튼을 재생 중 `중지` 버튼으로 전환 | [web/src/routes/AdvancedArticle.tsx](../web/src/routes/AdvancedArticle.tsx) |
+
+### 설계 메모
+
+- 첫 클릭은 여전히 런타임/모델 cold start 영향을 받을 수 있지만, 긴 본문 전체 합성이 끝날 때까지 기다리지 않고 첫 조각이 준비되면 바로 재생합니다.
+- 첫 조각 재생 중 다음 조각을 미리 합성하고 Cache Storage에 저장하므로, 사용자가 보통처럼 2~3회 반복 듣는 경우 점점 즉시 재생에 가까워집니다.
+- `stopSpeak()`가 Supertonic 합성 세션까지 취소하도록 연결해, 사용자가 재생 중 같은 버튼을 다시 누르면 현재 오디오와 다음 조각 진행이 중단됩니다.
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+
 ## 🌙 세션 #21 — Supertonic 반복 듣기용 음성 캐시
 
 ### ✅ 이 세션에서 완료된 것

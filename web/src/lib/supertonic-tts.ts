@@ -14,6 +14,8 @@ const AUDIO_CACHE_VERSION = "supertonic-audio-v1";
 const AUDIO_CACHE_LIMIT_BYTES = SUPERTONIC_AUDIO_CACHE_LIMIT_MB * 1024 * 1024;
 const AUDIO_CACHE_MAX_ITEM_BYTES = 48 * 1024 * 1024;
 const AUDIO_CACHE_MAX_ENTRIES = 24;
+const STREAMING_CHUNK_MAX_EN = 180;
+const STREAMING_CHUNK_MAX_KO = 95;
 const DEFAULT_VOICE_STYLE = "M1";
 const DEFAULT_TOTAL_STEPS = 5;
 const DEFAULT_SPEED = 1.05;
@@ -100,9 +102,17 @@ interface SupertonicStyle {
   dp: OrtTensor;
 }
 
+class SupertonicCancelledError extends Error {
+  constructor() {
+    super("Supertonic 재생을 중지했습니다.");
+  }
+}
+
 let runtimePromise: Promise<SupertonicRuntime> | null = null;
 let activeAudio: HTMLAudioElement | null = null;
 let activeAudioDone: (() => void) | null = null;
+let activeSupertonicRunId = 0;
+let supertonicInferenceQueue: Promise<unknown> = Promise.resolve();
 
 export function supertonicRuntimeStatus(): SupertonicRuntimeStatus {
   if (typeof window === "undefined") {
@@ -242,19 +252,23 @@ export async function trySpeakWithSupertonic(
   try {
     const lang = opts.lang === "ko" ? "ko" : "en";
     const speed = clamp(opts.rate ?? DEFAULT_SPEED, 0.7, 2);
+    const runId = beginSupertonicRun();
     const audioKey = await supertonicAudioCacheKey(text, lang, speed);
     const cachedAudio = await getCachedSupertonicAudio(audioKey);
+    assertSupertonicRun(runId);
     if (cachedAudio) {
-      await playAudioBlob(cachedAudio);
+      await playAudioBlob(cachedAudio, runId);
       return { started: true };
     }
 
     const runtime = await getRuntime(status.backend === "webgpu" ? "webgpu" : "wasm");
-    const audio = await synthesize(runtime, text, lang, speed);
-    await putCachedSupertonicAudio(audioKey, audio);
-    await playAudioBlob(audio);
+    assertSupertonicRun(runId);
+    await playSupertonicText(runtime, text, lang, speed, audioKey, runId);
     return { started: true };
   } catch (error) {
+    if (error instanceof SupertonicCancelledError) {
+      return { started: true, reasonKo: "재생을 중지했습니다." };
+    }
     const message = error instanceof Error ? error.message : String(error);
     runtimePromise = null;
     useStore.getState().setPrefs({ supertonicTtsLastError: message });
@@ -263,6 +277,27 @@ export async function trySpeakWithSupertonic(
 }
 
 export function stopSupertonicAudio() {
+  activeSupertonicRunId += 1;
+  stopActiveSupertonicAudio();
+}
+
+function beginSupertonicRun() {
+  activeSupertonicRunId += 1;
+  stopActiveSupertonicAudio();
+  return activeSupertonicRunId;
+}
+
+function assertSupertonicRun(runId?: number) {
+  if (runId !== undefined && runId !== activeSupertonicRunId) throw new SupertonicCancelledError();
+}
+
+async function runSerializedInference<T>(task: () => Promise<T>): Promise<T> {
+  const result = supertonicInferenceQueue.then(task, task);
+  supertonicInferenceQueue = result.catch(() => undefined);
+  return result;
+}
+
+function stopActiveSupertonicAudio() {
   const audio = activeAudio;
   const done = activeAudioDone;
   activeAudio = null;
@@ -272,12 +307,13 @@ export function stopSupertonicAudio() {
   done?.();
 }
 
-async function playAudioBlob(audio: Blob): Promise<void> {
-  stopSupertonicAudio();
+async function playAudioBlob(audio: Blob, runId: number): Promise<void> {
+  assertSupertonicRun(runId);
+  stopActiveSupertonicAudio();
   const url = URL.createObjectURL(audio);
   const audioEl = new Audio(url);
   activeAudio = audioEl;
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     let settled = false;
     const finish = (error?: Error) => {
       if (settled) return;
@@ -296,6 +332,7 @@ async function playAudioBlob(audio: Blob): Promise<void> {
       finish(new Error(message));
     });
   });
+  assertSupertonicRun(runId);
 }
 
 async function supertonicAudioCacheKey(text: string, lang: "en" | "ko", speed: number): Promise<string> {
@@ -416,6 +453,56 @@ async function getRuntime(preferredBackend: Exclude<SupertonicBackend, "unsuppor
   return runtimePromise;
 }
 
+async function playSupertonicText(
+  runtime: SupertonicRuntime,
+  text: string,
+  lang: "en" | "ko",
+  speed: number,
+  fullAudioKey: string,
+  runId: number,
+): Promise<void> {
+  const chunks = chunkText(text, lang === "ko" ? STREAMING_CHUNK_MAX_KO : STREAMING_CHUNK_MAX_EN);
+  if (chunks.length <= 1) {
+    const audio = await synthesize(runtime, text, lang, speed, runId);
+    assertSupertonicRun(runId);
+    await putCachedSupertonicAudio(fullAudioKey, audio);
+    await playAudioBlob(audio, runId);
+    return;
+  }
+
+  let nextAudioPromise: Promise<Blob> = getOrSynthesizeChunkAudio(runtime, chunks[0], lang, speed, runId);
+  for (let index = 0; index < chunks.length; index += 1) {
+    const audio = await nextAudioPromise;
+    assertSupertonicRun(runId);
+
+    const upcomingChunk = chunks[index + 1];
+    if (upcomingChunk) {
+      nextAudioPromise = getOrSynthesizeChunkAudio(runtime, upcomingChunk, lang, speed, runId);
+      nextAudioPromise.catch(() => undefined);
+    }
+
+    await playAudioBlob(audio, runId);
+  }
+}
+
+async function getOrSynthesizeChunkAudio(
+  runtime: SupertonicRuntime,
+  text: string,
+  lang: "en" | "ko",
+  speed: number,
+  runId: number,
+): Promise<Blob> {
+  const audioKey = await supertonicAudioCacheKey(`chunk:${text}`, lang, speed);
+  const cachedAudio = await getCachedSupertonicAudio(audioKey);
+  assertSupertonicRun(runId);
+  if (cachedAudio) return cachedAudio;
+
+  const audio = await synthesizeChunk(runtime, text, lang, speed, runId);
+  assertSupertonicRun(runId);
+  await putCachedSupertonicAudio(audioKey, audio);
+  return audio;
+}
+
 async function createRuntime(preferredBackend: Exclude<SupertonicBackend, "unsupported">): Promise<SupertonicRuntime> {
   const ort = await import("onnxruntime-web/webgpu");
   const sessionOptions = {
@@ -455,11 +542,21 @@ async function loadSessions(
   return { dp, textEnc, vectorEst, vocoder };
 }
 
-async function synthesize(runtime: SupertonicRuntime, text: string, lang: "en" | "ko", speed: number): Promise<Blob> {
-  const { wav, duration } = await synthesizeArrays(runtime, text, lang, runtime.style, DEFAULT_TOTAL_STEPS, speed, 0.25);
+async function synthesize(runtime: SupertonicRuntime, text: string, lang: "en" | "ko", speed: number, runId?: number): Promise<Blob> {
+  const { wav, duration } = await synthesizeArrays(runtime, text, lang, runtime.style, DEFAULT_TOTAL_STEPS, speed, 0.25, runId);
   const wavLen = Math.floor(runtime.sampleRate * duration[0]);
   const wavOut = wav.slice(0, wavLen);
   return new Blob([writeWavFile(wavOut, runtime.sampleRate)], { type: "audio/wav" });
+}
+
+async function synthesizeChunk(runtime: SupertonicRuntime, text: string, lang: "en" | "ko", speed: number, runId: number): Promise<Blob> {
+  const result = await runSerializedInference(async () => {
+    assertSupertonicRun(runId);
+    return inferOne(runtime, text, lang, runtime.style, DEFAULT_TOTAL_STEPS, speed);
+  });
+  assertSupertonicRun(runId);
+  const wavLen = Math.floor(runtime.sampleRate * result.duration[0]);
+  return new Blob([writeWavFile(result.wav.slice(0, wavLen), runtime.sampleRate)], { type: "audio/wav" });
 }
 
 async function synthesizeArrays(
@@ -470,12 +567,17 @@ async function synthesizeArrays(
   totalStep: number,
   speed: number,
   silenceDuration: number,
+  runId?: number,
 ): Promise<{ wav: number[]; duration: number[] }> {
   const chunks = chunkText(text, lang === "ko" ? 120 : 260);
   let wavCat: number[] = [];
   let durCat = 0;
   for (const chunk of chunks) {
-    const result = await inferOne(runtime, chunk, lang, style, totalStep, speed);
+    const result = await runSerializedInference(async () => {
+      assertSupertonicRun(runId);
+      return inferOne(runtime, chunk, lang, style, totalStep, speed);
+    });
+    assertSupertonicRun(runId);
     if (wavCat.length === 0) {
       wavCat = result.wav;
       durCat = result.duration[0];

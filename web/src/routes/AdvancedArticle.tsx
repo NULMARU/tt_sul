@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ADVANCED_ARTICLE_BY_ID } from "@shared/data/advanced.seed";
 import type { AdvancedArticle, AdvancedArticleCategory, SpeakingRubricItem } from "@shared/types/schema";
@@ -34,6 +34,7 @@ export function AdvancedArticle() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [playing, setPlaying] = useState<"body" | "expression" | null>(null);
   const [busy, setBusy] = useState(false);
+  const playRunRef = useRef(0);
 
   useEffect(() => {
     if (article) recordRead(article.id);
@@ -82,23 +83,34 @@ export function AdvancedArticle() {
   }
 
   async function playArticleBody() {
+    if (playing === "body") {
+      playRunRef.current += 1;
+      stopSpeak();
+      setPlaying(null);
+      return;
+    }
+
+    const runId = playRunRef.current + 1;
+    playRunRef.current = runId;
     stopSpeak();
     setPlaying("body");
     recordListening(currentArticle.id);
     try {
       await speak(currentArticle.body, { rate: 0.86 });
     } finally {
-      setPlaying(null);
+      if (playRunRef.current === runId) setPlaying(null);
     }
   }
 
   async function playExpression(expression: string) {
+    const runId = playRunRef.current + 1;
+    playRunRef.current = runId;
     recordListening(currentArticle.id, true);
     setPlaying("expression");
     try {
       await speak(expression, { rate: 0.84 });
     } finally {
-      setPlaying(null);
+      if (playRunRef.current === runId) setPlaying(null);
     }
   }
 
@@ -429,10 +441,11 @@ function ReadSection({
           </div>
           <button
             onClick={onPlayBody}
-            disabled={playing === "body"}
-            className="w-full rounded-xl bg-accent text-[#2A2522] px-3 py-2 text-sm font-medium disabled:opacity-50 sm:w-auto sm:shrink-0"
+            className={`w-full rounded-xl px-3 py-2 text-sm font-medium sm:w-auto sm:shrink-0 ${
+              playing === "body" ? "bg-danger text-white" : "bg-accent text-[#2A2522]"
+            }`}
           >
-            {playing === "body" ? "재생 중..." : "본문 듣기"}
+            {playing === "body" ? "중지" : "본문 듣기"}
           </button>
         </div>
       </section>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   INTERMEDIATE_READING_BY_ID,
@@ -19,6 +19,7 @@ export function IntermediateReading() {
   const [selected, setSelected] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const playRunRef = useRef(0);
 
   useEffect(() => {
     if (lesson) recordRead(lesson.id);
@@ -33,11 +34,23 @@ export function IntermediateReading() {
   const correct = selected === currentLesson.comprehension.answerIndex;
 
   async function playBody() {
+    if (playing) {
+      playRunRef.current += 1;
+      stopSpeak();
+      setPlaying(false);
+      return;
+    }
+
+    const runId = playRunRef.current + 1;
+    playRunRef.current = runId;
     stopSpeak();
     setPlaying(true);
     recordListening(currentLesson.id);
-    await speak(currentLesson.body, { rate: 0.88 });
-    setPlaying(false);
+    try {
+      await speak(currentLesson.body, { rate: 0.88 });
+    } finally {
+      if (playRunRef.current === runId) setPlaying(false);
+    }
   }
 
   async function playShadowing(sentence: string) {
@@ -86,17 +99,18 @@ export function IntermediateReading() {
       </section>
 
       <section className="rounded-2xl border border-accent/40 bg-accent/10 p-5">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="font-semibold">1단계 · 먼저 듣고 흐름 잡기</h2>
             <p className="mt-1 text-sm text-text-muted">모르는 단어를 멈춰 찾기보다 전체 흐름을 먼저 잡아보세요.</p>
           </div>
           <button
             onClick={playBody}
-            disabled={playing}
-            className="shrink-0 rounded-xl bg-accent text-[#2A2522] px-3 py-2 text-sm font-medium disabled:opacity-50"
+            className={`w-full rounded-xl px-3 py-2 text-sm font-medium sm:w-auto sm:shrink-0 ${
+              playing ? "bg-danger text-white" : "bg-accent text-[#2A2522]"
+            }`}
           >
-            {playing ? "재생 중..." : "듣기"}
+            {playing ? "중지" : "듣기"}
           </button>
         </div>
       </section>
