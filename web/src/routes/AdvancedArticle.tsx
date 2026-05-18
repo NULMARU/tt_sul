@@ -5,7 +5,7 @@ import type { AdvancedArticle, AdvancedArticleCategory, SpeakingRubricItem } fro
 import { ShadowingRecorder } from "../components/ShadowingRecorder";
 import { gradeWriting, llmAvailable } from "../lib/llm";
 import { useStore } from "../lib/store";
-import { speak, waitForTtsIdle } from "../lib/tts";
+import { speak, stopSpeak, waitForTtsIdle } from "../lib/tts";
 
 type SectionId = "read" | "debate" | "write" | "speak";
 type RubricScores = Partial<Record<SpeakingRubricItem["criterion"], number>>;
@@ -17,6 +17,7 @@ export function AdvancedArticle() {
   const article = id ? (ADVANCED_ARTICLE_BY_ID[id] ?? generatedArticle) : undefined;
   const progress = useStore(s => id ? s.advancedArticleProgress?.[id] : undefined);
   const recordRead = useStore(s => s.recordAdvancedArticleRead);
+  const recordListening = useStore(s => s.recordAdvancedListeningPractice);
   const saveDebateNote = useStore(s => s.saveAdvancedDebateNote);
   const saveDraft = useStore(s => s.saveAdvancedArticleDraft);
   const saveWritingFeedback = useStore(s => s.saveAdvancedWritingFeedback);
@@ -31,6 +32,7 @@ export function AdvancedArticle() {
   const [speakingNote, setSpeakingNote] = useState("");
   const [speakingSaved, setSpeakingSaved] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<"body" | "expression" | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -79,6 +81,27 @@ export function AdvancedArticle() {
     setBusy(false);
   }
 
+  async function playArticleBody() {
+    stopSpeak();
+    setPlaying("body");
+    recordListening(currentArticle.id);
+    try {
+      await speak(currentArticle.body, { rate: 0.86 });
+    } finally {
+      setPlaying(null);
+    }
+  }
+
+  async function playExpression(expression: string) {
+    recordListening(currentArticle.id, true);
+    setPlaying("expression");
+    try {
+      await speak(expression, { rate: 0.84 });
+    } finally {
+      setPlaying(null);
+    }
+  }
+
   return (
     <div className="px-5 pt-4 pb-4 flex flex-col gap-4">
       <header className="flex items-center gap-3">
@@ -125,6 +148,12 @@ export function AdvancedArticle() {
             약 {article.estimatedMinutes}분
           </span>
           <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted">
+            듣기 {progress?.listenCount ?? 0}회
+          </span>
+          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted">
+            표현 쉐도잉 {progress?.shadowingCount ?? 0}회
+          </span>
+          <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted">
             발화 {progress?.speakingPracticeCount ?? 0}회
           </span>
           <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted">
@@ -136,7 +165,7 @@ export function AdvancedArticle() {
 
       <div className="grid grid-cols-4 gap-1.5">
         {([
-          ["read", "읽기"],
+          ["read", "듣기·읽기"],
           ["debate", "토론"],
           ["write", "쓰기"],
           ["speak", "말하기"],
@@ -152,7 +181,13 @@ export function AdvancedArticle() {
       </div>
 
       {section === "read" && (
-        <ReadSection article={article} />
+        <ReadSection
+          article={article}
+          progress={progress}
+          playing={playing}
+          onPlayBody={playArticleBody}
+          onPlayExpression={playExpression}
+        />
       )}
 
       {section === "debate" && (
@@ -366,27 +401,70 @@ export function AdvancedArticle() {
   );
 }
 
-function ReadSection({ article }: { article: AdvancedArticle }) {
+function ReadSection({
+  article,
+  progress,
+  playing,
+  onPlayBody,
+  onPlayExpression,
+}: {
+  article: AdvancedArticle;
+  progress?: ReturnType<typeof useStore.getState>["advancedArticleProgress"][string];
+  playing: "body" | "expression" | null;
+  onPlayBody: () => void;
+  onPlayExpression: (expression: string) => void;
+}) {
   return (
-    <section className="rounded-2xl border border-border bg-surface p-4">
-      <h2 className="font-semibold">본문</h2>
-      <div className="en mt-3 whitespace-pre-line text-[15px] leading-7">
-        {article.body}
-      </div>
-      <h3 className="mt-5 text-sm font-semibold">고급 표현</h3>
-      <div className="mt-2 grid gap-2">
-        {article.keyExpressions.map(expression => (
+    <>
+      <section className="rounded-2xl border border-accent/40 bg-accent/10 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="font-semibold">1단계 · 먼저 듣고 논지 잡기</h2>
+            <p className="mt-1 text-sm text-text-muted">
+              상급 글은 문장을 멈춰 해석하기 전에 논지의 흐름, 전환어, 강조점을 먼저 귀로 잡아보세요.
+            </p>
+            <div className="mt-2 text-xs text-text-muted">
+              본문 듣기 {progress?.listenCount ?? 0}회 · 표현 쉐도잉 {progress?.shadowingCount ?? 0}회
+            </div>
+          </div>
           <button
-            key={expression.en}
-            onClick={() => speak(expression.en)}
-            className="rounded-xl bg-surface-2 p-3 text-left"
+            onClick={onPlayBody}
+            disabled={playing === "body"}
+            className="w-full rounded-xl bg-accent text-[#2A2522] px-3 py-2 text-sm font-medium disabled:opacity-50 sm:w-auto sm:shrink-0"
           >
-            <div className="en text-sm font-medium">{expression.en}</div>
-            <div className="mt-1 text-xs text-text-muted">{expression.ko} · {expression.usage}</div>
+            {playing === "body" ? "재생 중..." : "본문 듣기"}
           </button>
-        ))}
-      </div>
-    </section>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-surface p-4">
+        <h2 className="font-semibold">2단계 · 본문 읽기</h2>
+        <div className="en mt-3 whitespace-pre-line text-[15px] leading-7">
+          {article.body}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-border bg-surface p-4">
+        <h3 className="text-sm font-semibold">3단계 · 고급 표현 쉐도잉</h3>
+        <p className="mt-1 text-sm text-text-muted">
+          표현을 눌러 듣고, 같은 억양으로 바로 따라 말해보세요.
+        </p>
+        <div className="mt-3 grid gap-2">
+          {article.keyExpressions.map(expression => (
+            <button
+              key={expression.en}
+              onClick={() => onPlayExpression(expression.en)}
+              disabled={playing === "expression"}
+              className="rounded-xl bg-surface-2 p-3 text-left disabled:opacity-60"
+            >
+              <div className="text-xs text-text-muted">듣고 바로 따라 말하기</div>
+              <div className="en mt-0.5 text-sm font-medium">{expression.en}</div>
+              <div className="mt-1 text-xs text-text-muted">{expression.ko} · {expression.usage}</div>
+            </button>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
 

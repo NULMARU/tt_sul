@@ -91,6 +91,7 @@ interface StoreActions {
   recordIntermediateListeningPractice: (lessonId: string, shadowing?: boolean) => void;
   completeIntermediateReading: (lessonId: string, quizCorrect?: boolean) => void;
   recordAdvancedArticleRead: (articleId: string) => void;
+  recordAdvancedListeningPractice: (articleId: string, shadowing?: boolean) => void;
   saveAdvancedDebateNote: (articleId: string, debate: { debateStance?: "A" | "B" | "balanced"; debateNote?: string }) => void;
   saveAdvancedArticleDraft: (articleId: string, draft: { summaryDraft?: string; opinionDraft?: string }) => void;
   saveAdvancedWritingFeedback: (articleId: string, feedback: Omit<AdvancedWritingFeedback, "id" | "createdAt">) => void;
@@ -292,6 +293,29 @@ export const useStore = create<UserState & StoreActions>()(
               type: "advanced_article_read",
               result: "success",
               metadata: { articleId },
+            }),
+          ],
+        };
+      }),
+
+      recordAdvancedListeningPractice: (articleId, shadowing = false) => set(s => {
+        const prev = s.advancedArticleProgress?.[articleId] ?? emptyAdvancedArticleProgress();
+        return {
+          advancedArticleProgress: {
+            ...(s.advancedArticleProgress ?? {}),
+            [articleId]: {
+              ...prev,
+              listenCount: (prev.listenCount ?? 0) + 1,
+              shadowingCount: (prev.shadowingCount ?? 0) + (shadowing ? 1 : 0),
+              lastPracticedAt: new Date().toISOString(),
+            },
+          },
+          learningSignals: [
+            ...(s.learningSignals ?? []).slice(-499),
+            createSignal({
+              type: "advanced_listening_practice",
+              result: "success",
+              metadata: { articleId, shadowing },
             }),
           ],
         };
@@ -661,6 +685,8 @@ function emptyAdvancedArticleProgress(): UserState["advancedArticleProgress"][st
     read: false,
     completed: false,
     writingFeedbackHistory: [],
+    listenCount: 0,
+    shadowingCount: 0,
     speakingPracticeCount: 0,
     speakingAttempts: [],
   };

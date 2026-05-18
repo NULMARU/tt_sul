@@ -4,6 +4,23 @@
 
 ---
 
+## 🌙 세션 #20 — 상급 글 듣기 학습 루프 추가
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | 상급 글 진행 데이터에 본문 듣기/표현 쉐도잉 카운트 추가 | [src/types/schema.ts](../src/types/schema.ts), [web/src/lib/store.ts](../web/src/lib/store.ts) |
+| 2 | 상급 글 `읽기` 탭을 `듣기·읽기` 탭으로 확장 | [web/src/routes/AdvancedArticle.tsx](../web/src/routes/AdvancedArticle.tsx) |
+| 3 | 상급 본문 전체 듣기, 고급 표현 쉐도잉 듣기 버튼 추가 | [web/src/routes/AdvancedArticle.tsx](../web/src/routes/AdvancedArticle.tsx) |
+| 4 | 상급 목록과 메모리맵에 듣기 횟수 표시 추가 | [web/src/routes/Advanced.tsx](../web/src/routes/Advanced.tsx), [web/src/routes/MemoryMap.tsx](../web/src/routes/MemoryMap.tsx) |
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+- ✅ `git diff --check` 성공
+- ✅ 시각 QA: 모바일 폭에서 `듣기·읽기`, `본문 듣기`, `고급 표현 쉐도잉` 섹션 표시 확인
+
 ## 🌙 세션 #19 — Supertonic TTS 실제 캐시/ONNX 어댑터 연결
 
 ### ✅ 이 세션에서 완료된 것

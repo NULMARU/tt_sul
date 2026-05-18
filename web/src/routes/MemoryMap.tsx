@@ -240,6 +240,9 @@ function AdvancedMemoryMap() {
   }, [plan.generalArticles, plan.personalizedArticles]);
 
   const completed = orderedArticles.filter(article => progress[article.id]?.completed).length;
+  const listeningCount = orderedArticles.reduce((sum, article) =>
+    sum + (progress[article.id]?.listenCount ?? 0),
+  0);
   const feedbackCount = orderedArticles.reduce((sum, article) =>
     sum + (progress[article.id]?.writingFeedbackHistory?.length ?? 0) + (progress[article.id]?.speakingAttempts?.length ?? 0),
   0);
@@ -260,13 +263,14 @@ function AdvancedMemoryMap() {
         <p className="mt-1 text-sm text-text-muted">{plan.reasonKo}</p>
         <div className="mt-3 flex flex-wrap gap-1.5">
           <Pill>완료 {completed}/{orderedArticles.length}</Pill>
+          <Pill>듣기 {listeningCount}회</Pill>
           <Pill>피드백·발화 {feedbackCount}회</Pill>
           {topics.slice(0, 4).map(topic => <Pill key={topic} accent>{topic}</Pill>)}
         </div>
       </section>
 
       <section>
-        <SectionTitle title="상급 글 기억 지도" note="읽기, 토론 메모, 작문 피드백, 발화 평가" />
+        <SectionTitle title="상급 글 기억 지도" note="듣기, 읽기, 토론 메모, 작문 피드백, 발화 평가" />
         <div className="mt-3 grid gap-2.5">
           {orderedArticles.map(article => {
             const itemProgress = progress[article.id];
@@ -290,6 +294,7 @@ function AdvancedMemoryMap() {
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       <StatusPill {...status} />
                       <Pill>{article.trendLabelKo ?? categoryLabel(article.category)}</Pill>
+                      <Pill>듣기 {itemProgress?.listenCount ?? 0}회</Pill>
                       <Pill>작문 {itemProgress?.writingFeedbackHistory?.length ?? 0}회</Pill>
                       <Pill>발화 {itemProgress?.speakingPracticeCount ?? 0}회</Pill>
                     </div>
@@ -391,7 +396,7 @@ function progressStatus(completed = false, practiceCount = 0): { label: string; 
 
 function advancedStatus(progress: ReturnType<typeof useStore.getState>["advancedArticleProgress"][string] | undefined): { label: string; className: string } {
   if (progress?.completed) return { label: "기억 선명", className: "border-success/40 bg-success/10 text-success" };
-  if (progress?.read || progress?.writingFeedbackHistory?.length || progress?.speakingPracticeCount) {
+  if (progress?.read || progress?.listenCount || progress?.writingFeedbackHistory?.length || progress?.speakingPracticeCount) {
     return { label: "익숙해짐", className: "border-warn/40 bg-warn/10 text-warn" };
   }
   return { label: "복습 필요", className: "border-error/40 bg-error/10 text-error" };

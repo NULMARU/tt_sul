@@ -535,6 +535,7 @@ export type LearningSignalType =
   | "intermediate_listening_practice"
   | "intermediate_reading_complete"
   | "advanced_article_read"
+  | "advanced_listening_practice"
   | "advanced_writing_feedback"
   | "advanced_speaking_practice"
   | "advanced_article_complete"
@@ -649,6 +650,8 @@ export interface UserState {
     debateStance?: "A" | "B" | "balanced";
     debateNote?: string;
     writingFeedbackHistory?: AdvancedWritingFeedback[];
+    listenCount: number;
+    shadowingCount: number;
     speakingPracticeCount: number;
     speakingAttempts?: AdvancedSpeakingAttempt[];
     lastPracticedAt?: string;

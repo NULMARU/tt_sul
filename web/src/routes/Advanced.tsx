@@ -19,6 +19,8 @@ export function Advanced() {
   const personalizedPlan = buildPersonalizedAdvancedPlan(articles, journalInsight);
   const completed = articles.filter(article => progress[article.id]?.completed).length;
   const read = articles.filter(article => progress[article.id]?.read).length;
+  const listeningCount = articles.reduce((sum, article) =>
+    sum + (progress[article.id]?.listenCount ?? 0), 0);
   const writingFeedbackCount = articles.reduce((sum, article) =>
     sum + (progress[article.id]?.writingFeedbackHistory?.length ?? 0), 0);
   const speakingAttemptCount = articles.reduce((sum, article) =>
@@ -95,7 +97,7 @@ export function Advanced() {
         <div className="mt-3 h-2 rounded-full bg-surface-2 overflow-hidden">
           <div className="h-full bg-accent transition-[width]" style={{ width: `${pct}%` }} />
         </div>
-        <div className="mt-2 text-xs text-text-muted">읽은 글 {read}개 · 완료 {completed}개</div>
+        <div className="mt-2 text-xs text-text-muted">읽은 글 {read}개 · 듣기 {listeningCount}회 · 완료 {completed}개</div>
         <div className="mt-1 text-xs text-text-muted">작문 피드백 {writingFeedbackCount}회 · 발화 평가 {speakingAttemptCount}회</div>
       </section>
 
@@ -247,6 +249,9 @@ function ArticleCard({
             )}
             <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted">
               약 {article.estimatedMinutes}분
+            </span>
+            <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted">
+              듣기 {progress?.listenCount ?? 0}회
             </span>
             <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-text-muted">
               발화 {progress?.speakingPracticeCount ?? 0}회
