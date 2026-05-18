@@ -4,6 +4,26 @@
 
 ---
 
+## 🌙 세션 #17 — 저작권자 표기 + Supertonic TTS 검토
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | 앱 정보에 저작권자 `Nul Maru` 표기 추가 | [web/src/routes/Toolbelt.tsx](../web/src/routes/Toolbelt.tsx) |
+| 2 | 패키지 메타데이터 author를 `Nul Maru`로 추가 | [web/package.json](../web/package.json), [web/package-lock.json](../web/package-lock.json) |
+| 3 | Supertonic TTS의 앱 적용 가능성, 라이선스, 구현 조건 검토 문서화 | [docs/tts-supertonic-review.md](tts-supertonic-review.md) |
+
+### 설계 메모
+
+- 앱 표기는 `© 2026 Nul Maru. All rights reserved.`로 표시합니다.
+- Supertonic은 영어/한국어/베트남어/일본어를 모두 지원하므로 학습 앱 방향과 잘 맞지만, 모델이 OpenRAIL-M이고 크기가 커서 기본 번들 탑재가 아니라 선택형 지연 다운로드 방식이 적합합니다.
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+- ✅ `git diff --check` 성공
+
 ## 🌙 세션 #16 — 앱 표시 버전 갱신
 
 ### ✅ 이 세션에서 완료된 것

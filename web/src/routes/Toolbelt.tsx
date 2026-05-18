@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useStore } from "../lib/store";
 import { llmAvailable, llmProxyUrl, probeHealth, probeTest, suggestContentUpdate, type HealthResult } from "../lib/llm";
 import { analyzeContent, buildLlmContentSuggestion, buildLocalContentSuggestion, contentLabPayload } from "../lib/content-lab";
-import { APP_VERSION } from "../lib/version";
+import { APP_COPYRIGHT_NOTICE, APP_VERSION } from "../lib/version";
 import { PHRASE_BY_ID } from "@shared/data/phrases.seed";
 import type { ContentSuggestion } from "@shared/types/schema";
 
@@ -106,6 +106,8 @@ export function Toolbelt() {
       <Card title="앱 정보">
         <div className="text-xs text-text-muted leading-relaxed">
           Sulsul+ v{APP_VERSION} · GitHub Pages/PWA 빌드
+          <br />
+          {APP_COPYRIGHT_NOTICE}. All rights reserved.
         </div>
       </Card>
     </div>
