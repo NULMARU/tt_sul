@@ -2,12 +2,18 @@ import { useStore } from "./store";
 
 export const SUPERTONIC_CONSENT_VERSION = "supertonic-openrail-m-2026-05";
 export const SUPERTONIC_ESTIMATED_MODEL_MB = 398;
+export const SUPERTONIC_AUDIO_CACHE_LIMIT_MB = 96;
 export const SUPERTONIC_GITHUB_URL = "https://github.com/supertone-inc/supertonic";
 export const SUPERTONIC_MODEL_URL = "https://huggingface.co/Supertone/supertonic-3";
 export const SUPERTONIC_MODEL_LICENSE_URL = "https://huggingface.co/Supertone/supertonic-3/blob/main/LICENSE";
 
 const HF_RESOLVE_BASE = "https://huggingface.co/Supertone/supertonic-3/resolve/main";
 const CACHE_NAME = "sulsul-supertonic-v1";
+const AUDIO_CACHE_NAME = "sulsul-supertonic-audio-v1";
+const AUDIO_CACHE_VERSION = "supertonic-audio-v1";
+const AUDIO_CACHE_LIMIT_BYTES = SUPERTONIC_AUDIO_CACHE_LIMIT_MB * 1024 * 1024;
+const AUDIO_CACHE_MAX_ITEM_BYTES = 48 * 1024 * 1024;
+const AUDIO_CACHE_MAX_ENTRIES = 24;
 const DEFAULT_VOICE_STYLE = "M1";
 const DEFAULT_TOTAL_STEPS = 5;
 const DEFAULT_SPEED = 1.05;
@@ -49,6 +55,13 @@ export interface SupertonicPrepareProgress {
   label: string;
   current: number;
   total: number;
+}
+
+export interface SupertonicAudioCacheStatus {
+  cachedCount: number;
+  totalBytes: number;
+  limitBytes: number;
+  maxEntries: number;
 }
 
 export interface SupertonicSpeakResult {
@@ -180,6 +193,7 @@ export async function prepareSupertonicAssets(onProgress?: (progress: Supertonic
 
 export async function clearSupertonicAssets(): Promise<void> {
   if (canUseCacheStorage()) await caches.delete(CACHE_NAME);
+  await clearSupertonicAudioCache();
   runtimePromise = null;
   useStore.getState().setPrefs({
     supertonicTtsAssetsCachedAt: undefined,
@@ -187,10 +201,26 @@ export async function clearSupertonicAssets(): Promise<void> {
   });
 }
 
+export async function supertonicAudioCacheStatus(): Promise<SupertonicAudioCacheStatus> {
+  if (!canUseCacheStorage()) return audioCacheStatusBase();
+  const entries = await listAudioCacheEntries();
+  return {
+    cachedCount: entries.length,
+    totalBytes: entries.reduce((sum, entry) => sum + entry.bytes, 0),
+    limitBytes: AUDIO_CACHE_LIMIT_BYTES,
+    maxEntries: AUDIO_CACHE_MAX_ENTRIES,
+  };
+}
+
+export async function clearSupertonicAudioCache(): Promise<void> {
+  if (canUseCacheStorage()) await caches.delete(AUDIO_CACHE_NAME);
+}
+
 export function supertonicNoticeItems(): string[] {
   return [
     "기본 TTS는 계속 유지하고, Supertonic은 조건을 확인한 사용자에게만 시도합니다.",
     `모델 자산은 약 ${SUPERTONIC_ESTIMATED_MODEL_MB}MB 수준이라 기본 번들에 포함하지 않습니다.`,
+    `합성된 음성은 최대 ${SUPERTONIC_AUDIO_CACHE_LIMIT_MB}MB까지만 보관하고 오래된 항목부터 자동 정리합니다.`,
     "모델은 OpenRAIL-M 조건을 따르며 불법·사칭·괴롭힘·차별·의료/법률 판단 등 금지 용도로 사용할 수 없습니다.",
     "실패하거나 기기가 지원하지 않으면 자동으로 기존 시스템 TTS로 돌아갑니다.",
   ];
@@ -210,10 +240,18 @@ export async function trySpeakWithSupertonic(
   }
 
   try {
-    const runtime = await getRuntime(status.backend === "webgpu" ? "webgpu" : "wasm");
     const lang = opts.lang === "ko" ? "ko" : "en";
     const speed = clamp(opts.rate ?? DEFAULT_SPEED, 0.7, 2);
+    const audioKey = await supertonicAudioCacheKey(text, lang, speed);
+    const cachedAudio = await getCachedSupertonicAudio(audioKey);
+    if (cachedAudio) {
+      await playAudioBlob(cachedAudio);
+      return { started: true };
+    }
+
+    const runtime = await getRuntime(status.backend === "webgpu" ? "webgpu" : "wasm");
     const audio = await synthesize(runtime, text, lang, speed);
+    await putCachedSupertonicAudio(audioKey, audio);
     await playAudioBlob(audio);
     return { started: true };
   } catch (error) {
@@ -258,6 +296,119 @@ async function playAudioBlob(audio: Blob): Promise<void> {
       finish(new Error(message));
     });
   });
+}
+
+async function supertonicAudioCacheKey(text: string, lang: "en" | "ko", speed: number): Promise<string> {
+  const normalized = text.trim().replace(/\s+/g, " ");
+  const source = [
+    AUDIO_CACHE_VERSION,
+    DEFAULT_VOICE_STYLE,
+    DEFAULT_TOTAL_STEPS,
+    lang,
+    speed.toFixed(2),
+    normalized,
+  ].join("|");
+  const digest = await sha256(source);
+  return `${lang}-${speed.toFixed(2)}-${DEFAULT_VOICE_STYLE}-${digest}`;
+}
+
+async function getCachedSupertonicAudio(key: string): Promise<Blob | null> {
+  if (!canUseCacheStorage()) return null;
+  try {
+    const cache = await caches.open(AUDIO_CACHE_NAME);
+    const request = audioCacheRequest(key);
+    const cached = await cache.match(request);
+    if (!cached) return null;
+    const blob = await cached.blob();
+    try {
+      await cache.put(request, audioCacheResponse(blob, {
+        createdAt: cached.headers.get("X-Sulsul-Created-At") ?? new Date().toISOString(),
+        lastUsedAt: new Date().toISOString(),
+        key,
+      }));
+    } catch {
+      // The cached audio is still usable even if updating recency metadata fails.
+    }
+    return blob;
+  } catch {
+    return null;
+  }
+}
+
+async function putCachedSupertonicAudio(key: string, audio: Blob): Promise<void> {
+  if (!canUseCacheStorage() || audio.size <= 0 || audio.size > AUDIO_CACHE_MAX_ITEM_BYTES) return;
+  try {
+    const cache = await caches.open(AUDIO_CACHE_NAME);
+    const now = new Date().toISOString();
+    await cache.put(audioCacheRequest(key), audioCacheResponse(audio, {
+      createdAt: now,
+      lastUsedAt: now,
+      key,
+    }));
+    await trimSupertonicAudioCache();
+  } catch {
+    // Audio cache is an optimization only. Never block playback because storage is full.
+  }
+}
+
+async function trimSupertonicAudioCache(): Promise<void> {
+  const cache = await caches.open(AUDIO_CACHE_NAME);
+  const entries = await listAudioCacheEntries();
+  let totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+  let count = entries.length;
+  for (const entry of entries.sort((a, b) => a.lastUsedAt - b.lastUsedAt)) {
+    if (totalBytes <= AUDIO_CACHE_LIMIT_BYTES && count <= AUDIO_CACHE_MAX_ENTRIES) break;
+    if (await cache.delete(entry.request)) {
+      totalBytes -= entry.bytes;
+      count -= 1;
+    }
+  }
+}
+
+async function listAudioCacheEntries(): Promise<Array<{ request: Request; bytes: number; lastUsedAt: number }>> {
+  if (!canUseCacheStorage()) return [];
+  const cache = await caches.open(AUDIO_CACHE_NAME);
+  const requests = await cache.keys();
+  const entries = await Promise.all(requests.map(async request => {
+    const response = await cache.match(request);
+    if (!response) return null;
+    const bytes = Number(response.headers.get("X-Sulsul-Bytes")) || (await response.clone().blob()).size;
+    const lastUsed = response.headers.get("X-Sulsul-Last-Used-At")
+      ?? response.headers.get("X-Sulsul-Created-At")
+      ?? "1970-01-01T00:00:00.000Z";
+    return { request, bytes, lastUsedAt: new Date(lastUsed).getTime() || 0 };
+  }));
+  return entries.filter((entry): entry is { request: Request; bytes: number; lastUsedAt: number } => !!entry);
+}
+
+function audioCacheResponse(audio: Blob, meta: { createdAt: string; lastUsedAt: string; key: string }): Response {
+  return new Response(audio, {
+    headers: {
+      "Content-Type": audio.type || "audio/wav",
+      "X-Sulsul-Audio-Cache-Version": AUDIO_CACHE_VERSION,
+      "X-Sulsul-Audio-Key": meta.key,
+      "X-Sulsul-Bytes": String(audio.size),
+      "X-Sulsul-Created-At": meta.createdAt,
+      "X-Sulsul-Last-Used-At": meta.lastUsedAt,
+    },
+  });
+}
+
+function audioCacheRequest(key: string): Request {
+  return new Request(`${window.location.origin}/__sulsul_supertonic_audio__/${encodeURIComponent(key)}.wav`);
+}
+
+async function sha256(value: string): Promise<string> {
+  if (typeof crypto !== "undefined" && crypto.subtle) {
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+    return Array.from(new Uint8Array(bytes)).map(byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 32);
+  }
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash >>> 0).toString(16).padStart(8, "0");
 }
 
 async function getRuntime(preferredBackend: Exclude<SupertonicBackend, "unsupported">): Promise<SupertonicRuntime> {
@@ -544,6 +695,15 @@ function assetStatusBase(cachedCount: number, lastError?: string): SupertonicAss
     totalCount: ASSETS.length,
     estimatedBytes: ASSETS.reduce((sum, asset) => sum + asset.bytes, 0),
     lastError,
+  };
+}
+
+function audioCacheStatusBase(): SupertonicAudioCacheStatus {
+  return {
+    cachedCount: 0,
+    totalBytes: 0,
+    limitBytes: AUDIO_CACHE_LIMIT_BYTES,
+    maxEntries: AUDIO_CACHE_MAX_ENTRIES,
   };
 }
 

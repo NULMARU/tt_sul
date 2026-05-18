@@ -6,15 +6,19 @@ import { analyzeContent, buildLlmContentSuggestion, buildLocalContentSuggestion,
 import { APP_COPYRIGHT_NOTICE, APP_VERSION } from "../lib/version";
 import {
   SUPERTONIC_CONSENT_VERSION,
+  SUPERTONIC_AUDIO_CACHE_LIMIT_MB,
   SUPERTONIC_ESTIMATED_MODEL_MB,
   SUPERTONIC_GITHUB_URL,
   SUPERTONIC_MODEL_LICENSE_URL,
   SUPERTONIC_MODEL_URL,
+  clearSupertonicAudioCache,
   clearSupertonicAssets,
   prepareSupertonicAssets,
+  supertonicAudioCacheStatus,
   supertonicAssetStatus,
   supertonicNoticeItems,
   supertonicRuntimeStatus,
+  type SupertonicAudioCacheStatus,
   type SupertonicAssetStatus,
   type SupertonicPrepareProgress,
 } from "../lib/supertonic-tts";
@@ -345,8 +349,9 @@ function TtsProviderSection() {
   const consentCurrent = prefs.supertonicTtsConsentVersion === SUPERTONIC_CONSENT_VERSION && !!prefs.supertonicTtsAcceptedAt;
   const safeModeActive = supertonicEnabled && consentCurrent;
   const [assetStatus, setAssetStatus] = useState<SupertonicAssetStatus | null>(null);
+  const [audioStatus, setAudioStatus] = useState<SupertonicAudioCacheStatus | null>(null);
   const [prepareProgress, setPrepareProgress] = useState<SupertonicPrepareProgress | null>(null);
-  const [busy, setBusy] = useState<"status" | "prepare" | "clear" | "test" | null>(null);
+  const [busy, setBusy] = useState<"status" | "prepare" | "clear" | "audio-clear" | "test" | null>(null);
   const [message, setMessage] = useState("");
   const estimatedMb = assetStatus
     ? Math.round(assetStatus.estimatedBytes / 1024 / 1024)
@@ -354,8 +359,12 @@ function TtsProviderSection() {
 
   useEffect(() => {
     let mounted = true;
-    supertonicAssetStatus()
-      .then(next => { if (mounted) setAssetStatus(next); })
+    Promise.all([supertonicAssetStatus(), supertonicAudioCacheStatus()])
+      .then(([nextAssetStatus, nextAudioStatus]) => {
+        if (!mounted) return;
+        setAssetStatus(nextAssetStatus);
+        setAudioStatus(nextAudioStatus);
+      })
       .catch(error => { if (mounted) setMessage(error instanceof Error ? error.message : String(error)); });
     return () => { mounted = false; };
   }, [prefs.supertonicTtsAssetsCachedAt, prefs.supertonicTtsLastError]);
@@ -380,7 +389,12 @@ function TtsProviderSection() {
     setBusy("status");
     setMessage("");
     try {
-      setAssetStatus(await supertonicAssetStatus());
+      const [nextAssetStatus, nextAudioStatus] = await Promise.all([
+        supertonicAssetStatus(),
+        supertonicAudioCacheStatus(),
+      ]);
+      setAssetStatus(nextAssetStatus);
+      setAudioStatus(nextAudioStatus);
       setMessage("캐시 상태를 확인했습니다.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -413,8 +427,27 @@ function TtsProviderSection() {
     setMessage("");
     try {
       await clearSupertonicAssets();
-      setAssetStatus(await supertonicAssetStatus());
-      setMessage("Supertonic 모델 캐시를 삭제했습니다.");
+      const [nextAssetStatus, nextAudioStatus] = await Promise.all([
+        supertonicAssetStatus(),
+        supertonicAudioCacheStatus(),
+      ]);
+      setAssetStatus(nextAssetStatus);
+      setAudioStatus(nextAudioStatus);
+      setMessage("Supertonic 모델 캐시와 음성 캐시를 삭제했습니다.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function clearAudioCache() {
+    setBusy("audio-clear");
+    setMessage("");
+    try {
+      await clearSupertonicAudioCache();
+      setAudioStatus(await supertonicAudioCacheStatus());
+      setMessage("합성된 음성 캐시를 삭제했습니다.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -430,6 +463,7 @@ function TtsProviderSection() {
       setMessage(assetStatus?.cached && safeModeActive
         ? "테스트 재생이 끝났습니다. 실패한 경우에는 시스템 TTS로 자동 전환됩니다."
         : "테스트 재생이 끝났습니다. 모델 캐시 전에는 시스템 TTS로 재생됩니다.");
+      setAudioStatus(await supertonicAudioCacheStatus());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -505,6 +539,25 @@ function TtsProviderSection() {
         )}
       </div>
 
+      <div className="rounded-xl border border-border bg-surface-2 p-3 text-xs leading-relaxed">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="font-semibold text-text">음성 캐시</div>
+            <div className="text-text-muted">
+              {audioStatus
+                ? `${audioStatus.cachedCount}개 · ${formatBytes(audioStatus.totalBytes)} / ${SUPERTONIC_AUDIO_CACHE_LIMIT_MB}MB`
+                : "상태 확인 중"}
+            </div>
+          </div>
+          <span className="w-fit rounded-full border border-border px-2 py-0.5 text-text-muted">
+            자동 정리
+          </span>
+        </div>
+        <p className="mt-2 text-text-muted">
+          같은 글·같은 속도는 합성된 WAV를 재사용합니다. 제한을 넘으면 오래된 음성부터 자동 삭제됩니다.
+        </p>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={refreshAssetStatus}
@@ -525,7 +578,14 @@ function TtsProviderSection() {
           disabled={!!busy || !assetStatus?.cachedCount}
           className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-muted disabled:opacity-50"
         >
-          {busy === "clear" ? "삭제 중…" : "캐시 삭제"}
+          {busy === "clear" ? "삭제 중…" : "모델 캐시 삭제"}
+        </button>
+        <button
+          onClick={clearAudioCache}
+          disabled={!!busy || !audioStatus?.cachedCount}
+          className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-text-muted disabled:opacity-50"
+        >
+          {busy === "audio-clear" ? "삭제 중…" : "음성 캐시 삭제"}
         </button>
         <button
           onClick={testTts}
@@ -558,6 +618,11 @@ function TtsProviderSection() {
       </div>
     </Card>
   );
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 
 function ResultBox({ label, ok, latency, detail }: { label: string; ok: boolean; latency?: number; detail?: string }) {

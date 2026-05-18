@@ -4,6 +4,28 @@
 
 ---
 
+## 🌙 세션 #21 — Supertonic 반복 듣기용 음성 캐시
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | 같은 글·같은 속도·같은 음성스타일의 합성 WAV를 재사용하는 음성 캐시 추가 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
+| 2 | 음성 캐시 최대 96MB/24개 제한, 48MB 초과 단일 파일 제외, 오래된 항목 자동 정리 추가 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
+| 3 | 도구함에 음성 캐시 사용량과 수동 삭제 버튼 추가 | [web/src/routes/Toolbelt.tsx](../web/src/routes/Toolbelt.tsx) |
+| 4 | 모델 캐시 삭제 시 관련 음성 캐시도 함께 삭제되도록 정리 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
+
+### 설계 메모
+
+- Supertonic 모델이 준비된 뒤 첫 합성은 여전히 시간이 걸릴 수 있지만, 같은 글을 2~3번 반복해서 들을 때는 저장된 WAV를 바로 재생합니다.
+- 캐시 키는 `모델 캐시 버전 + 음성 스타일 + 합성 step + 언어 + 속도 + 본문 해시` 기준입니다.
+- 저장공간 문제가 생기지 않도록 음성 캐시는 제한을 넘으면 오래된 항목부터 자동 삭제됩니다.
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+- ✅ `git diff --check` 성공
+
 ## 🌙 세션 #20 — 상급 글 듣기 학습 루프 추가
 
 ### ✅ 이 세션에서 완료된 것

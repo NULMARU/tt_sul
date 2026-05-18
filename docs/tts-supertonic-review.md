@@ -12,6 +12,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - 다만 GitHub Pages 또는 별도 스토리지에서 모델 파일을 제공하면 다운로드 트래픽이 늘 수 있고, 사용자 기기에는 약 398MB 수준의 저장공간과 배터리/성능 부담이 생길 수 있습니다.
 - 현재 구현은 모델 파일을 앱 번들에 포함하지 않고, 사용자가 도구함에서 `모델 캐시 준비`를 누를 때만 Hugging Face 모델 자산을 Cache Storage에 저장합니다. 합성 실행 중 캐시가 없으면 재다운로드하지 않고 시스템 TTS로 fallback합니다.
 - ONNX Runtime Web 실행 파일은 배포 산출물에 포함되지만 PWA 사전 캐시 대상에서는 제외했습니다. Supertonic 합성 경로가 실제로 호출될 때만 런타임 로드를 시도합니다.
+- 합성된 음성은 별도 Cache Storage에 최대 96MB, 최대 24개까지만 보관합니다. 같은 글·같은 속도·같은 음성 스타일은 저장된 WAV를 재사용하고, 제한을 넘으면 오래된 음성부터 자동 삭제합니다.
 
 ## 적합한 점
 
@@ -51,6 +52,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - [x] 모델 크기, OpenRAIL-M, 금지 용도, fallback 고지 UI 추가
 - [x] 모델 다운로드 크기, 캐시 상태, 캐시 삭제 UI 추가
 - [x] 모델 지연 다운로드 + Cache Storage 저장 추가
+- [x] 합성 결과 WAV 캐시, 용량 제한, LRU형 자동 정리, 수동 삭제 UI 추가
 - [x] ONNX Runtime Web WebGPU 우선, WASM fallback 어댑터 추가
 - [x] Supertonic 실패 시 시스템 TTS fallback 유지
 - [x] Supertonic 모델과 예제 코드, ONNX Runtime Web 고지 문서 추가
@@ -62,6 +64,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 ## 현재 구현 상태
 
 - `web/src/lib/supertonic-tts.ts`: Supertonic 조건 고지, 런타임 감지, opt-in 동의 버전, 모델 자산 캐시, WebGPU/WASM ONNX 합성, 시스템 TTS fallback 레일 추가
+- `web/src/lib/supertonic-tts.ts`: 같은 글 반복 듣기용 합성 음성 캐시 추가. 캐시 키는 모델/음성/언어/속도/본문 해시를 기준으로 생성합니다.
 - `web/src/lib/tts.ts`: Supertonic 재생 성공 시 오디오 종료까지 TTS 상태를 유지하고, 실패하면 기존 Web Speech API로 자동 fallback
 - `web/src/routes/Toolbelt.tsx`: 도구함에 TTS 음성 엔진 카드, 모델 캐시 상태/준비/삭제/테스트 UI 추가
 - `docs/third-party-notices.md`: Supertonic 예제 코드, Supertonic 3 모델, ONNX Runtime Web 고지 추가
