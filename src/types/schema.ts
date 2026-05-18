@@ -589,6 +589,7 @@ export interface RecommendationFeedback {
 }
 
 export type AdaptiveUiLevel = "off" | "safe" | "suggested" | "experimental";
+export type TtsProvider = "system" | "supertonic";
 
 export interface AdaptiveUiPatch {
   id: string;
@@ -697,6 +698,9 @@ export interface UserState {
     ttsPitch: number;
     ttsVoiceURI?: string | null;
     ttsKoreanVoiceURI?: string | null;
+    ttsProvider: TtsProvider;
+    supertonicTtsAcceptedAt?: string;
+    supertonicTtsConsentVersion?: string;
     timeColorAuto: boolean;
     notificationEnabled: boolean;
     notificationTime?: string; // "07:20"

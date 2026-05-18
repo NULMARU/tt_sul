@@ -69,6 +69,7 @@ function emptyState(): UserState {
       narrationLevel: "examples",
       ttsRate: 1,
       ttsPitch: 1,
+      ttsProvider: "system",
       timeColorAuto: true,
       notificationEnabled: false,
       darkMode: "system",

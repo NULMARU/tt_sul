@@ -1,4 +1,5 @@
 import { useStore } from "./store";
+import { trySpeakWithSupertonic } from "./supertonic-tts";
 
 let activeToken = 0;
 let activeResolve: (() => void) | null = null;
@@ -39,12 +40,22 @@ export function findVoice(lang: "en" | "ko"): SpeechSynthesisVoice | undefined {
   return voices.find(v => v.lang.startsWith("ko-KR")) || voices.find(v => v.lang.startsWith("ko"));
 }
 
-export function speak(text: string, opts: { lang?: "en" | "ko"; rate?: number; pitch?: number } = {}): Promise<void> {
-  if (!ttsSupported() || !text.trim()) return Promise.resolve();
+export async function speak(text: string, opts: { lang?: "en" | "ko"; rate?: number; pitch?: number } = {}): Promise<void> {
+  if (!text.trim()) return Promise.resolve();
   stopSpeak();
   const token = ++activeToken;
   setSnapshot({ speaking: true, currentText: text, startedAt: Date.now() });
   useStore.getState().recordTtsPlay(text);
+
+  if (useStore.getState().prefs.ttsProvider === "supertonic") {
+    const supertonic = await trySpeakWithSupertonic();
+    if (supertonic.started) return;
+  }
+
+  if (!ttsSupported()) {
+    finishToken(token);
+    return Promise.resolve();
+  }
 
   return new Promise(resolve => {
     activeResolve = resolve;

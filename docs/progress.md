@@ -4,6 +4,33 @@
 
 ---
 
+## 🌙 세션 #18 — Supertonic TTS 안전 도입 레일
+
+### ✅ 이 세션에서 완료된 것
+
+| # | 항목 | 산출물 |
+|---|---|---|
+| 1 | TTS provider 설정 추가: `system` / `supertonic` | [src/types/schema.ts](../src/types/schema.ts), [web/src/lib/store.ts](../web/src/lib/store.ts) |
+| 2 | Supertonic 조건 고지, 런타임 감지, opt-in 동의 버전, 비용 안내 상수 추가 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
+| 3 | Supertonic 준비 모드 선택 시에도 실제 모델 어댑터가 없으면 시스템 TTS로 자동 fallback | [web/src/lib/tts.ts](../web/src/lib/tts.ts) |
+| 4 | 도구함에 `TTS 음성 엔진` 카드 추가 | [web/src/routes/Toolbelt.tsx](../web/src/routes/Toolbelt.tsx) |
+| 5 | Supertonic 비용/조건 검토 문서를 현재 구현 상태로 갱신 | [docs/tts-supertonic-review.md](tts-supertonic-review.md) |
+
+### 설계 메모
+
+- 현재 단계에서는 Supertonic 모델 파일을 앱 번들에 포함하지 않고 다운로드도 시작하지 않습니다.
+- 따라서 새 API 과금이나 모델 다운로드 트래픽은 발생하지 않습니다.
+- 사용자가 Supertonic 준비 모드를 켜도 실제 합성 어댑터가 연결되기 전까지는 기존 Web Speech API로 재생합니다.
+- 다음 단계는 모델 지연 다운로드, Cache Storage/IndexedDB 캐시, ONNX Runtime Web 어댑터, 모바일 성능 QA입니다.
+
+### 🧪 검증
+
+- ✅ `web`: `npm run build` 성공
+- ✅ `git diff --check` 성공
+- ✅ 브라우저 QA: 도구함에서 TTS 음성 엔진 카드, 404MB 비용 안내, Supertonic 준비 버튼 표시 확인
+- ✅ 브라우저 QA: Supertonic 준비 모드 선택 후 조건 확인 완료/시스템 TTS 자동 fallback 고지 표시 확인
+- ✅ 브라우저 콘솔 오류 0건
+
 ## 🌙 세션 #17 — 저작권자 표기 + Supertonic TTS 검토
 
 ### ✅ 이 세션에서 완료된 것

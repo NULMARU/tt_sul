@@ -4,6 +4,16 @@ import { useStore } from "../lib/store";
 import { llmAvailable, llmProxyUrl, probeHealth, probeTest, suggestContentUpdate, type HealthResult } from "../lib/llm";
 import { analyzeContent, buildLlmContentSuggestion, buildLocalContentSuggestion, contentLabPayload } from "../lib/content-lab";
 import { APP_COPYRIGHT_NOTICE, APP_VERSION } from "../lib/version";
+import {
+  SUPERTONIC_CONSENT_VERSION,
+  SUPERTONIC_ESTIMATED_MODEL_MB,
+  SUPERTONIC_GITHUB_URL,
+  SUPERTONIC_MODEL_LICENSE_URL,
+  SUPERTONIC_MODEL_URL,
+  supertonicNoticeItems,
+  supertonicRuntimeStatus,
+} from "../lib/supertonic-tts";
+import { speak } from "../lib/tts";
 import { PHRASE_BY_ID } from "@shared/data/phrases.seed";
 import type { ContentSuggestion } from "@shared/types/schema";
 
@@ -60,6 +70,8 @@ export function Toolbelt() {
           <Segment value={prefs.adaptiveUiLevel ?? "safe"} options={["off","safe","suggested","experimental"]} onChange={v => setPrefs({ adaptiveUiLevel: v as any })} />
         </Field>
       </Card>
+
+      <TtsProviderSection />
 
       <Card title="학습 패턴">
         <div className="text-xs text-text-muted leading-relaxed">
@@ -316,6 +328,88 @@ function LLMSection() {
         AI 호출 테스트 = 실제 Claude API에 1회 호출하여 API 키와 라우팅 확인.
       </p>
     </section>
+  );
+}
+
+function TtsProviderSection() {
+  const prefs = useStore(s => s.prefs);
+  const setPrefs = useStore(s => s.setPrefs);
+  const status = supertonicRuntimeStatus();
+  const provider = prefs.ttsProvider ?? "system";
+  const supertonicEnabled = provider === "supertonic";
+  const consentCurrent = prefs.supertonicTtsConsentVersion === SUPERTONIC_CONSENT_VERSION && !!prefs.supertonicTtsAcceptedAt;
+  const safeModeActive = supertonicEnabled && consentCurrent;
+
+  function enableSupertonic() {
+    setPrefs({
+      ttsProvider: "supertonic",
+      supertonicTtsAcceptedAt: new Date().toISOString(),
+      supertonicTtsConsentVersion: SUPERTONIC_CONSENT_VERSION,
+    });
+  }
+
+  function disableSupertonic() {
+    setPrefs({
+      ttsProvider: "system",
+      supertonicTtsAcceptedAt: undefined,
+      supertonicTtsConsentVersion: undefined,
+    });
+  }
+
+  return (
+    <Card title="TTS 음성 엔진">
+      <div className="rounded-xl border border-border bg-surface-2 p-3 text-xs text-text-muted leading-relaxed">
+        <div className="font-semibold text-text">현재 엔진: {safeModeActive ? "Supertonic 준비 모드" : "시스템 기본 TTS"}</div>
+        <div className="mt-1">
+          Supertonic은 추가 API 과금 없이 온디바이스로 붙일 수 있는 후보지만, 모델이 약 {SUPERTONIC_ESTIMATED_MODEL_MB}MB라 기본 번들에는 넣지 않습니다.
+        </div>
+        <div className="mt-1">{status.reasonKo}</div>
+        <div className="mt-1">{status.costNoteKo}</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={disableSupertonic}
+          className={`rounded-lg border px-3 py-2 text-sm ${!safeModeActive ? "border-accent bg-accent/10 font-medium" : "border-border bg-surface-2 text-text-muted"}`}
+        >
+          기본 TTS
+        </button>
+        <button
+          onClick={enableSupertonic}
+          disabled={!status.supported}
+          className={`rounded-lg border px-3 py-2 text-sm disabled:opacity-40 ${safeModeActive ? "border-accent bg-accent/10 font-medium" : "border-border bg-surface-2 text-text-muted"}`}
+        >
+          Supertonic 준비
+        </button>
+      </div>
+
+      {safeModeActive && (
+        <div className="rounded-xl border border-accent/40 bg-accent/10 p-3 text-xs leading-relaxed">
+          <div className="font-semibold text-accent-strong">조건 확인 완료</div>
+          <ul className="mt-2 list-disc pl-4 text-text-muted space-y-1">
+            {supertonicNoticeItems().map(item => <li key={item}>{item}</li>)}
+          </ul>
+          <p className="mt-2 text-text-muted">
+            현재 버전은 안전 레일만 활성화합니다. 모델 지연 다운로드/ONNX 어댑터가 연결되기 전까지는 기존 시스템 TTS로 자동 재생됩니다.
+          </p>
+        </div>
+      )}
+
+      <button
+        onClick={() => speak("A small satellite can do a big job.", { rate: prefs.ttsRate })}
+        className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
+      >
+        테스트 문장 재생
+      </button>
+
+      <div className="text-[11px] text-text-muted leading-relaxed">
+        참고: <a className="underline" href={SUPERTONIC_GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a>
+        {" · "}
+        <a className="underline" href={SUPERTONIC_MODEL_URL} target="_blank" rel="noreferrer">Model</a>
+        {" · "}
+        <a className="underline" href={SUPERTONIC_MODEL_LICENSE_URL} target="_blank" rel="noreferrer">OpenRAIL-M License</a>
+      </div>
+    </Card>
   );
 }
 
