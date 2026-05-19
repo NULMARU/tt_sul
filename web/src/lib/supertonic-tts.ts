@@ -93,6 +93,16 @@ export interface SupertonicPrecacheResult {
   reasonKo?: string;
 }
 
+export interface SupertonicPrecacheStatus {
+  supported: boolean;
+  ready: boolean;
+  total: number;
+  cached: number;
+  missing: number;
+  needsBuild: boolean;
+  reasonKo?: string;
+}
+
 interface SupertonicRuntime {
   ort: Ort;
   backend: Exclude<SupertonicBackend, "unsupported">;
@@ -365,6 +375,43 @@ export async function precacheSupertonicTexts(
   }
 }
 
+export async function supertonicPrecacheStatus(
+  items: SupertonicPrecacheItem[],
+  opts: { lang?: "en" | "ko"; rate?: number } = {},
+): Promise<SupertonicPrecacheStatus> {
+  const status = supertonicRuntimeStatus();
+  if (!supertonicConsentAccepted()) {
+    return { supported: status.supported, ready: false, total: 0, cached: 0, missing: 0, needsBuild: false, reasonKo: "Supertonic 조건 확인이 필요합니다." };
+  }
+  if (!status.supported) {
+    return { supported: false, ready: false, total: 0, cached: 0, missing: 0, needsBuild: false, reasonKo: status.reasonKo };
+  }
+  if (!status.ready) {
+    return { supported: true, ready: false, total: 0, cached: 0, missing: 0, needsBuild: false, reasonKo: "모델 캐시 준비가 필요합니다." };
+  }
+
+  const cleanItems = items
+    .map(item => ({ ...item, text: item.text.trim() }))
+    .filter(item => item.text.length > 0);
+  const lang = opts.lang === "ko" ? "ko" : "en";
+  const speed = clamp(opts.rate ?? DEFAULT_SPEED, 0.7, 2);
+  const chunks = cleanItems.flatMap(item => chunkText(item.text, lang === "ko" ? STREAMING_CHUNK_MAX_KO : STREAMING_CHUNK_MAX_EN));
+  let cached = 0;
+  for (const chunk of chunks) {
+    const audioKey = await supertonicAudioCacheKey(`chunk:${chunk}`, lang, speed);
+    if (await hasCachedSupertonicAudio(audioKey)) cached += 1;
+  }
+  const missing = Math.max(0, chunks.length - cached);
+  return {
+    supported: true,
+    ready: true,
+    total: chunks.length,
+    cached,
+    missing,
+    needsBuild: missing > 0,
+  };
+}
+
 export function stopSupertonicAudio() {
   activeSupertonicRunId += 1;
   stopActiveSupertonicAudio();
@@ -479,6 +526,16 @@ async function getCachedSupertonicAudio(key: string): Promise<Blob | null> {
     return blob;
   } catch {
     return null;
+  }
+}
+
+async function hasCachedSupertonicAudio(key: string): Promise<boolean> {
+  if (!canUseCacheStorage()) return false;
+  try {
+    const cache = await caches.open(AUDIO_CACHE_NAME);
+    return !!await cache.match(audioCacheRequest(key));
+  } catch {
+    return false;
   }
 }
 

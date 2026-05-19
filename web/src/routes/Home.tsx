@@ -16,8 +16,10 @@ import {
   precacheSupertonicTexts,
   stopSupertonicPrecache,
   supertonicConsentAccepted,
+  supertonicPrecacheStatus,
   supertonicRuntimeStatus,
   type SupertonicPrecacheProgress,
+  type SupertonicPrecacheStatus,
 } from "../lib/supertonic-tts";
 import type { AdvancedArticle, AudioPrebuildScope } from "@shared/types/schema";
 
@@ -313,6 +315,8 @@ function ListeningPrebuildCard({
   const nav = useNavigate();
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<SupertonicPrecacheProgress | null>(null);
+  const [cacheStatus, setCacheStatus] = useState<SupertonicPrecacheStatus | null>(null);
+  const [checkingCache, setCheckingCache] = useState(false);
   const [message, setMessage] = useState("");
   const autoRunRef = useRef("");
   const scope = prefs.audioPrebuildScope ?? "today";
@@ -321,19 +325,94 @@ function ListeningPrebuildCard({
     () => prebuildItemsForScope(scope, todayItems, recommendedItems, courseItems),
     [courseItems, recommendedItems, scope, todayItems],
   );
+  const selectedItemsKey = useMemo(
+    () => selectedItems.map(item => `${item.id}|${item.label}|${item.text}`).join("\n"),
+    [selectedItems],
+  );
   const status = supertonicRuntimeStatus();
   const supertonicReady = supertonicConsentAccepted() && status.supported && status.ready;
   const autoRunKey = `${localDateKey()}:${levelId}:${scope}:${time}`;
+  const prebuildRate = levelId === "advanced" ? 0.86 : 0.88;
+  const needsBuild = !!cacheStatus?.needsBuild;
+  const hasPrebuildItems = selectedItems.length > 0;
+  const canBuildNow = supertonicReady && hasPrebuildItems && needsBuild;
+  const buildDisabledReason = (() => {
+    if (!hasPrebuildItems) return "현재 범위에는 미리 만들 듣기자료가 없습니다.";
+    if (!supertonicReady) return "Supertonic 준비가 필요합니다.";
+    if (!cacheStatus) return "캐시 상태를 확인하고 있어요.";
+    if (!needsBuild) return "선택한 범위의 듣기자료가 이미 준비되어 있습니다.";
+    return "";
+  })();
+  const badgeLabel = !supertonicReady
+    ? "준비 필요"
+    : checkingCache
+      ? "확인 중"
+      : !hasPrebuildItems
+        ? "자료 없음"
+        : needsBuild
+          ? "만들기 필요"
+          : "준비됨";
+  const buildButtonLabel = busy
+    ? "중지"
+    : checkingCache
+      ? "확인 중..."
+      : !supertonicReady
+        ? "준비 필요"
+        : !hasPrebuildItems
+          ? "자료 없음"
+          : needsBuild
+            ? "지금 만들기"
+            : "이미 준비됨";
 
   useEffect(() => () => stopSupertonicPrecache(), []);
 
   useEffect(() => {
-    if (!prefs.audioPrebuildAutoEnabled || busy || !supertonicReady) return;
+    let cancelled = false;
+    setCacheStatus(null);
+    setCheckingCache(true);
+    if (!supertonicReady) {
+      setCacheStatus({
+        supported: status.supported,
+        ready: false,
+        total: 0,
+        cached: 0,
+        missing: 0,
+        needsBuild: false,
+        reasonKo: status.reasonKo,
+      });
+      setCheckingCache(false);
+      return () => { cancelled = true; };
+    }
+    void supertonicPrecacheStatus(selectedItems, { rate: prebuildRate })
+      .then(next => {
+        if (cancelled) return;
+        setCacheStatus(next);
+        setCheckingCache(false);
+      })
+      .catch(error => {
+        if (cancelled) return;
+        const reasonKo = error instanceof Error ? error.message : String(error);
+        setCacheStatus({
+          supported: true,
+          ready: false,
+          total: 0,
+          cached: 0,
+          missing: 0,
+          needsBuild: false,
+          reasonKo: `캐시 상태 확인 실패: ${reasonKo}`,
+        });
+        setCheckingCache(false);
+      });
+    return () => { cancelled = true; };
+  }, [prebuildRate, selectedItemsKey, status.reasonKo, status.supported, supertonicReady]);
+
+  useEffect(() => {
+    if (!prefs.audioPrebuildAutoEnabled || busy || !supertonicReady || !needsBuild) return;
     if (prefs.audioPrebuildLastRunKey === autoRunKey || autoRunRef.current === autoRunKey) return;
     if (!timeHasPassed(time)) return;
     autoRunRef.current = autoRunKey;
     void runPrebuild("auto");
-  }, [autoRunKey, busy, prefs.audioPrebuildAutoEnabled, prefs.audioPrebuildLastRunKey, supertonicReady, time]);
+  }, [autoRunKey, busy, needsBuild, prefs.audioPrebuildAutoEnabled, prefs.audioPrebuildLastRunKey, supertonicReady, time]);
 
   async function runPrebuild(mode: "manual" | "auto") {
     if (busy) return;
@@ -345,11 +424,15 @@ function ListeningPrebuildCard({
       setMessage("미리 만들 듣기자료가 없습니다.");
       return;
     }
+    if (cacheStatus && !cacheStatus.needsBuild) {
+      setMessage("선택한 범위의 듣기자료가 이미 준비되어 있어요. 새 글이 추가되거나 캐시가 삭제되면 다시 만들 수 있습니다.");
+      return;
+    }
 
     setBusy(true);
     setProgress({ current: 0, total: selectedItems.length, label: "", prepared: 0, skipped: 0 });
     setMessage(mode === "auto" ? "예약 시간이라 듣기자료를 만들기 시작했어요." : "듣기자료를 만들고 있어요. 앱을 켜둔 채 잠시 기다려주세요.");
-    const result = await precacheSupertonicTexts(selectedItems, { rate: levelId === "advanced" ? 0.86 : 0.88 }, setProgress);
+    const result = await precacheSupertonicTexts(selectedItems, { rate: prebuildRate }, setProgress);
     setBusy(false);
     if (!result.started) {
       setMessage(result.reasonKo ?? "듣기자료를 만들지 못했어요.");
@@ -360,6 +443,7 @@ function ListeningPrebuildCard({
       return;
     }
     setMessage(`완료: 새로 만든 조각 ${result.prepared}개 · 이미 있던 조각 ${result.skipped}개`);
+    setCacheStatus(await supertonicPrecacheStatus(selectedItems, { rate: prebuildRate }));
     if (mode === "auto") setPrefs({ audioPrebuildLastRunKey: autoRunKey });
   }
 
@@ -380,7 +464,7 @@ function ListeningPrebuildCard({
           </p>
         </div>
         <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] ${supertonicReady ? "bg-success/10 text-success" : "bg-surface-2 text-text-muted"}`}>
-          {supertonicReady ? "준비됨" : "준비 필요"}
+          {badgeLabel}
         </span>
       </div>
 
@@ -402,9 +486,10 @@ function ListeningPrebuildCard({
       <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
         <button
           onClick={() => busy ? stopPrebuild() : void runPrebuild("manual")}
-          className={`rounded-xl px-4 py-2.5 text-sm font-medium ${busy ? "bg-danger text-white" : "bg-accent text-[#2A2522]"}`}
+          disabled={!busy && !canBuildNow}
+          className={`rounded-xl px-4 py-2.5 text-sm font-medium disabled:opacity-50 ${busy ? "bg-danger text-white" : "bg-accent text-[#2A2522]"}`}
         >
-          {busy ? "중지" : "지금 만들기"}
+          {buildButtonLabel}
         </button>
         <button
           onClick={() => nav("/toolbelt")}
@@ -413,6 +498,15 @@ function ListeningPrebuildCard({
           TTS 설정
         </button>
       </div>
+
+      {cacheStatus && (
+        <p className="mt-2 rounded-xl bg-surface-2 p-3 text-xs text-text-muted">
+          {cacheStatus.ready
+            ? `캐시 상태: 준비됨 ${cacheStatus.cached}/${cacheStatus.total} · 필요한 조각 ${cacheStatus.missing}개`
+            : cacheStatus.reasonKo}
+          {!busy && buildDisabledReason && ` ${buildDisabledReason}`}
+        </p>
+      )}
 
       {progress && busy && (
         <div className="mt-3 rounded-xl bg-surface-2 p-3 text-xs text-text-muted">

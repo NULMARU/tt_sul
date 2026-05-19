@@ -20,6 +20,7 @@
 | 8 | `오늘` 화면에 듣기자료 사전생성 카드, 사용법, 범위 선택, 예약 실행 옵션 추가 | [src/types/schema.ts](../src/types/schema.ts), [web/src/routes/Home.tsx](../web/src/routes/Home.tsx) |
 | 9 | Supertonic 사전합성 API와 중지 제어 추가, 음성 캐시 최대 엔트리 96개로 확장 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
 | 10 | 초급 과정에서는 Supertonic이 켜져 있어도 기본 내장 TTS를 사용하도록 분리 | [web/src/lib/tts.ts](../web/src/lib/tts.ts), [web/src/routes/Toolbelt.tsx](../web/src/routes/Toolbelt.tsx) |
+| 11 | 듣기자료 캐시 상태를 확인해 이미 준비된 범위는 `지금 만들기` 버튼을 비활성화 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts), [web/src/routes/Home.tsx](../web/src/routes/Home.tsx) |
 
 ### 설계 메모
 
@@ -28,14 +29,18 @@
 - `stopSpeak()`가 Supertonic 합성 세션까지 취소하도록 연결해, 사용자가 재생 중 같은 버튼을 다시 누르면 현재 오디오와 다음 조각 진행이 중단됩니다.
 - 버튼 문구는 `본문듣기`를 기본값으로 유지하고, 합성 대기 중에는 `합성중`, 실제 재생 중에는 `재생중`으로 짧게 표시합니다. 사용자가 버튼이 사라졌다고 느끼지 않도록 하기 위함입니다.
 - 예약 실행은 브라우저 제약상 서버 백그라운드 작업이 아니라, 앱이 열려 있고 지정 시간이 지났을 때 현재 과정에서 하루 1회 실행하는 방식입니다.
+- `듣기자료 미리만들어놓기`의 `지금 만들기` 버튼은 처음 사용, 새 글 추가, 캐시 삭제, 속도/음성 캐시 키 변경처럼 선택 범위에 빠진 음성 조각이 있을 때만 활성화합니다.
+- 이미 준비된 경우에는 버튼을 `이미 준비됨`으로 비활성화하고, 캐시 상태에 `준비됨 n/n · 필요한 조각 0개`를 표시합니다.
 - 유료 Supertone API는 품질/지연시간 개선 가능성이 있지만 비용, rate limit, 300자 요청 제한, 개인정보 전송 이슈가 있어 별도 opt-in 기능으로 분리하는 것이 안전합니다.
 - 초급 과정은 빠른 반응성이 중요하므로 전역 Supertonic 설정이 켜져 있어도 기본 재생은 브라우저 내장 TTS를 사용합니다. 중급/상급은 기존처럼 Supertonic 설정을 따릅니다.
 
 ### 🧪 검증
 
 - ✅ `web`: `npm run build` 성공
+- ✅ `git diff --check` 성공
 - ✅ 모바일 폭 시각 QA: 중급/상급 본문듣기 버튼 표시 확인
 - ✅ CDP QA: 상급 글에서 본문듣기 후 다른 페이지 이동 시 대기 상태가 남지 않음 확인
+- ✅ 브라우저 QA: 상급 `오늘` 화면에서 Supertonic 미준비 시 `준비 필요` 버튼이 비활성화되고 안내 문구가 표시됨 확인
 
 ## 🌙 세션 #21 — Supertonic 반복 듣기용 음성 캐시
 

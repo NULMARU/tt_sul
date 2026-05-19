@@ -15,6 +15,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - 합성된 음성은 별도 Cache Storage에 최대 96MB, 최대 24개까지만 보관합니다. 같은 글·같은 속도·같은 음성 스타일은 저장된 WAV를 재사용하고, 제한을 넘으면 오래된 음성부터 자동 삭제합니다.
 - 중급/상급 장문은 전체 본문 합성이 끝날 때까지 기다리지 않고 조각 단위로 먼저 재생합니다. 첫 조각 재생 중 다음 조각을 준비하고, 조각별 음성도 같은 캐시 제한 안에서 재사용합니다.
 - `오늘` 화면의 `듣기자료 미리만들어놓기`는 Supertonic 온디바이스 합성 경로에서만 실제 음성 캐시를 만듭니다. 브라우저 기본 TTS는 합성 파일을 앱이 저장할 수 없으므로 사전 생성 대상이 아닙니다.
+- `지금 만들기`는 선택 범위의 조각 캐시가 빠져 있을 때만 활성화합니다. 처음 앱을 쓰거나 캐시 삭제, 새 글 추가, 음성 캐시 키 변경이 있을 때는 다시 만들 수 있고, 이미 모두 준비된 경우에는 비활성화합니다.
 
 ## 유료 Supertone API 검토
 
@@ -65,6 +66,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - [x] 합성 결과 WAV 캐시, 용량 제한, LRU형 자동 정리, 수동 삭제 UI 추가
 - [x] 장문 본문듣기 조각 단위 우선 재생과 재생 중 중지 제어 추가
 - [x] `오늘` 화면에 듣기자료 사전생성 수동/예약 UI 추가
+- [x] 사전생성 캐시 상태 확인 후 필요한 경우에만 `지금 만들기` 활성화
 - [x] 초급 과정 기본 TTS를 시스템 내장 TTS로 고정하고 중급/상급만 Supertonic 설정을 따르도록 분리
 - [x] ONNX Runtime Web WebGPU 우선, WASM fallback 어댑터 추가
 - [x] Supertonic 실패 시 시스템 TTS fallback 유지
@@ -79,7 +81,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - `web/src/lib/supertonic-tts.ts`: Supertonic 조건 고지, 런타임 감지, opt-in 동의 버전, 모델 자산 캐시, WebGPU/WASM ONNX 합성, 시스템 TTS fallback 레일 추가
 - `web/src/lib/supertonic-tts.ts`: 같은 글 반복 듣기용 합성 음성 캐시 추가. 캐시 키는 모델/음성/언어/속도/본문 해시를 기준으로 생성합니다.
 - `web/src/lib/supertonic-tts.ts`: 중급/상급 장문 본문은 조각별 합성·재생·캐시를 적용해 첫 재생 대기 시간을 줄이고 중간 중지를 지원합니다.
-- `web/src/routes/Home.tsx`: 현재 과정의 오늘/맞춤/전체 본문 음성을 미리 합성해 캐시에 저장하는 UI와 하루 1회 예약 실행 옵션을 제공합니다.
+- `web/src/routes/Home.tsx`: 현재 과정의 오늘/맞춤/전체 본문 음성을 미리 합성해 캐시에 저장하는 UI와 하루 1회 예약 실행 옵션을 제공합니다. 캐시가 이미 준비된 범위는 `지금 만들기`를 비활성화하고, 빠진 조각이 있을 때만 다시 만들 수 있게 합니다.
 - `web/src/lib/tts.ts`: Supertonic 재생 성공 시 오디오 종료까지 TTS 상태를 유지하고, 실패하면 기존 Web Speech API로 자동 fallback
 - `web/src/routes/Toolbelt.tsx`: 도구함에 TTS 음성 엔진 카드, 모델 캐시 상태/준비/삭제/테스트 UI 추가
 - `docs/third-party-notices.md`: Supertonic 예제 코드, Supertonic 3 모델, ONNX Runtime Web 고지 추가
