@@ -14,6 +14,14 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - ONNX Runtime Web 실행 파일은 배포 산출물에 포함되지만 PWA 사전 캐시 대상에서는 제외했습니다. Supertonic 합성 경로가 실제로 호출될 때만 런타임 로드를 시도합니다.
 - 합성된 음성은 별도 Cache Storage에 최대 96MB, 최대 24개까지만 보관합니다. 같은 글·같은 속도·같은 음성 스타일은 저장된 WAV를 재사용하고, 제한을 넘으면 오래된 음성부터 자동 삭제합니다.
 - 중급/상급 장문은 전체 본문 합성이 끝날 때까지 기다리지 않고 조각 단위로 먼저 재생합니다. 첫 조각 재생 중 다음 조각을 준비하고, 조각별 음성도 같은 캐시 제한 안에서 재사용합니다.
+- `오늘` 화면의 `듣기자료 미리만들어놓기`는 Supertonic 온디바이스 합성 경로에서만 실제 음성 캐시를 만듭니다. 브라우저 기본 TTS는 합성 파일을 앱이 저장할 수 없으므로 사전 생성 대상이 아닙니다.
+
+## 유료 Supertone API 검토
+
+- Supertone은 별도 클라우드 API/Play 요금제를 제공합니다. 공식 가격표 기준 Free는 3,000 credits(약 5분), Starter는 월 $2.99에 20,000 credits(약 30분), Creator는 월 $14.99에 100,000 credits(약 150분), Pro는 월 $79.99에 500,000 credits(약 800분)입니다. Creator/Pro는 Supertonic 사용 시 50% credit saving 표기가 있습니다.
+- 공식 API 모델 문서상 품질과 지연시간 선택지가 분리되어 있습니다. `Sona Speech 2`는 “Best overall speech quality”, `Sona Speech 2 Flash`는 “Low-latency & lightweight inference”, `Supertonic API 1`은 “Minimal configuration & fastest setup” 용도로 안내됩니다.
+- 따라서 유료 API를 쓰면 발음/표현력은 `Sona Speech 2` 계열에서 개선될 가능성이 큽니다. 합성 시작 지연은 `Sona Speech 2 Flash` 또는 스트리밍 지원 모델을 쓰면 개선될 수 있습니다. 다만 네트워크 왕복, 요청당 300자 제한, rate limit, API 비용, 사용자 학습 텍스트가 외부 서버로 전송되는 개인정보 이슈가 생깁니다.
+- 현재 앱의 안전한 기본 방향은 유지합니다: 기본은 무료 온디바이스 Supertonic + 캐시/사전생성으로 체감 지연을 줄이고, 유료 API는 향후 별도 opt-in, API 키 보관, 개인정보 고지, 서버 프록시, 사용량 제한을 갖춘 실험 기능으로 검토합니다.
 
 ## 적합한 점
 
@@ -55,6 +63,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - [x] 모델 지연 다운로드 + Cache Storage 저장 추가
 - [x] 합성 결과 WAV 캐시, 용량 제한, LRU형 자동 정리, 수동 삭제 UI 추가
 - [x] 장문 본문듣기 조각 단위 우선 재생과 재생 중 중지 제어 추가
+- [x] `오늘` 화면에 듣기자료 사전생성 수동/예약 UI 추가
 - [x] ONNX Runtime Web WebGPU 우선, WASM fallback 어댑터 추가
 - [x] Supertonic 실패 시 시스템 TTS fallback 유지
 - [x] Supertonic 모델과 예제 코드, ONNX Runtime Web 고지 문서 추가
@@ -68,6 +77,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - `web/src/lib/supertonic-tts.ts`: Supertonic 조건 고지, 런타임 감지, opt-in 동의 버전, 모델 자산 캐시, WebGPU/WASM ONNX 합성, 시스템 TTS fallback 레일 추가
 - `web/src/lib/supertonic-tts.ts`: 같은 글 반복 듣기용 합성 음성 캐시 추가. 캐시 키는 모델/음성/언어/속도/본문 해시를 기준으로 생성합니다.
 - `web/src/lib/supertonic-tts.ts`: 중급/상급 장문 본문은 조각별 합성·재생·캐시를 적용해 첫 재생 대기 시간을 줄이고 중간 중지를 지원합니다.
+- `web/src/routes/Home.tsx`: 현재 과정의 오늘/맞춤/전체 본문 음성을 미리 합성해 캐시에 저장하는 UI와 하루 1회 예약 실행 옵션을 제공합니다.
 - `web/src/lib/tts.ts`: Supertonic 재생 성공 시 오디오 종료까지 TTS 상태를 유지하고, 실패하면 기존 Web Speech API로 자동 fallback
 - `web/src/routes/Toolbelt.tsx`: 도구함에 TTS 음성 엔진 카드, 모델 캐시 상태/준비/삭제/테스트 UI 추가
 - `docs/third-party-notices.md`: Supertonic 예제 코드, Supertonic 3 모델, ONNX Runtime Web 고지 추가
@@ -78,3 +88,6 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - GitHub License: https://github.com/supertone-inc/supertonic/blob/main/LICENSE
 - Hugging Face model: https://huggingface.co/Supertone/supertonic-3
 - Hugging Face model license: https://huggingface.co/Supertone/supertonic-3/blob/main/LICENSE
+- Supertone API pricing: https://www.supertone.ai/en/api
+- Supertone API models: https://docs.supertoneapi.com/en/user-guide/models
+- Supertone API text-to-speech: https://docs.supertoneapi.com/en/api-reference/endpoints/text-to-speech

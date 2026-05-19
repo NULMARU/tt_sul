@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "../lib/store";
 import { useNavigate } from "react-router-dom";
 import { NowCard } from "../components/NowCard";
@@ -11,7 +12,14 @@ import { DIALOGUE_LESSONS } from "@shared/data/dialogues.seed";
 import { INTERMEDIATE_READING_LESSONS } from "@shared/data/intermediate-readings.seed";
 import { ADVANCED_ARTICLES } from "@shared/data/advanced.seed";
 import { buildPersonalizedAdvancedPlan } from "../lib/advanced-personalization";
-import type { AdvancedArticle } from "@shared/types/schema";
+import {
+  precacheSupertonicTexts,
+  stopSupertonicPrecache,
+  supertonicConsentAccepted,
+  supertonicRuntimeStatus,
+  type SupertonicPrecacheProgress,
+} from "../lib/supertonic-tts";
+import type { AdvancedArticle, AudioPrebuildScope } from "@shared/types/schema";
 
 export function Home() {
   const nav = useNavigate();
@@ -110,6 +118,16 @@ function IntermediateToday() {
   const title = recommendReading ? nextReading?.title : nextDialogue?.title;
   const subtitle = recommendReading ? nextReading?.subtitle : nextDialogue?.subtitle;
   const path = recommendReading ? `/intermediate-reading/${nextReading?.id}` : `/dialogue/${nextDialogue?.id}`;
+  const readingItems = INTERMEDIATE_READING_LESSONS.map(lesson => ({
+    id: lesson.id,
+    label: lesson.title,
+    text: lesson.body,
+  }));
+  const suggestedReadingItems = uniqueListeningItems([
+    nextReading,
+    ...INTERMEDIATE_READING_LESSONS.filter(lesson => !readingProgress[lesson.id]?.completed),
+    ...INTERMEDIATE_READING_LESSONS,
+  ].map(lesson => ({ id: lesson.id, label: lesson.title, text: lesson.body }))).slice(0, 3);
 
   return (
     <>
@@ -144,6 +162,14 @@ function IntermediateToday() {
           </button>
         </div>
       </section>
+
+      <ListeningPrebuildCard
+        levelId="intermediate"
+        levelLabel="중급"
+        todayItems={[{ id: nextReading.id, label: nextReading.title, text: nextReading.body }]}
+        recommendedItems={suggestedReadingItems}
+        courseItems={readingItems}
+      />
 
       <section className="grid grid-cols-2 gap-3">
         <button
@@ -181,6 +207,17 @@ function AdvancedToday() {
   const feedbackCount = articles.reduce((sum, article) =>
     sum + (progress[article.id]?.writingFeedbackHistory?.length ?? 0) + (progress[article.id]?.speakingAttempts?.length ?? 0),
   0);
+  const articleItems = articles.map(article => ({
+    id: article.id,
+    label: article.title,
+    text: article.body,
+  }));
+  const suggestedArticleItems = uniqueListeningItems([
+    recommended,
+    ...personalizedPlan.personalizedArticles,
+    ...articles.filter(article => !progress[article.id]?.completed),
+    ...articles,
+  ].map(article => ({ id: article.id, label: article.title, text: article.body }))).slice(0, 3);
 
   return (
     <>
@@ -221,6 +258,14 @@ function AdvancedToday() {
         </div>
       </section>
 
+      <ListeningPrebuildCard
+        levelId="advanced"
+        levelLabel="상급"
+        todayItems={[{ id: recommended.id, label: recommended.title, text: recommended.body }]}
+        recommendedItems={suggestedArticleItems}
+        courseItems={articleItems}
+      />
+
       <button
         onClick={() => nav("/advanced")}
         className="w-full rounded-2xl border border-accent/50 bg-accent/10 p-4 text-left"
@@ -242,4 +287,216 @@ function mergeArticles(generated: AdvancedArticle[], seeded: AdvancedArticle[]):
     seen.add(article.id);
     return true;
   });
+}
+
+interface ListeningPrebuildItem {
+  id: string;
+  label: string;
+  text: string;
+}
+
+function ListeningPrebuildCard({
+  levelId,
+  levelLabel,
+  todayItems,
+  recommendedItems,
+  courseItems,
+}: {
+  levelId: "intermediate" | "advanced";
+  levelLabel: string;
+  todayItems: ListeningPrebuildItem[];
+  recommendedItems: ListeningPrebuildItem[];
+  courseItems: ListeningPrebuildItem[];
+}) {
+  const prefs = useStore(s => s.prefs);
+  const setPrefs = useStore(s => s.setPrefs);
+  const nav = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<SupertonicPrecacheProgress | null>(null);
+  const [message, setMessage] = useState("");
+  const autoRunRef = useRef("");
+  const scope = prefs.audioPrebuildScope ?? "today";
+  const time = prefs.audioPrebuildTime ?? "07:00";
+  const selectedItems = useMemo(
+    () => prebuildItemsForScope(scope, todayItems, recommendedItems, courseItems),
+    [courseItems, recommendedItems, scope, todayItems],
+  );
+  const status = supertonicRuntimeStatus();
+  const supertonicReady = supertonicConsentAccepted() && status.supported && status.ready;
+  const autoRunKey = `${localDateKey()}:${levelId}:${scope}:${time}`;
+
+  useEffect(() => () => stopSupertonicPrecache(), []);
+
+  useEffect(() => {
+    if (!prefs.audioPrebuildAutoEnabled || busy || !supertonicReady) return;
+    if (prefs.audioPrebuildLastRunKey === autoRunKey || autoRunRef.current === autoRunKey) return;
+    if (!timeHasPassed(time)) return;
+    autoRunRef.current = autoRunKey;
+    void runPrebuild("auto");
+  }, [autoRunKey, busy, prefs.audioPrebuildAutoEnabled, prefs.audioPrebuildLastRunKey, supertonicReady, time]);
+
+  async function runPrebuild(mode: "manual" | "auto") {
+    if (busy) return;
+    if (!supertonicReady) {
+      setMessage("Supertonic 준비 후 사용할 수 있어요. 도구함에서 Supertonic 준비와 모델 캐시 준비를 먼저 해주세요.");
+      return;
+    }
+    if (selectedItems.length === 0) {
+      setMessage("미리 만들 듣기자료가 없습니다.");
+      return;
+    }
+
+    setBusy(true);
+    setProgress({ current: 0, total: selectedItems.length, label: "", prepared: 0, skipped: 0 });
+    setMessage(mode === "auto" ? "예약 시간이라 듣기자료를 만들기 시작했어요." : "듣기자료를 만들고 있어요. 앱을 켜둔 채 잠시 기다려주세요.");
+    const result = await precacheSupertonicTexts(selectedItems, { rate: levelId === "advanced" ? 0.86 : 0.88 }, setProgress);
+    setBusy(false);
+    if (!result.started) {
+      setMessage(result.reasonKo ?? "듣기자료를 만들지 못했어요.");
+      return;
+    }
+    if (result.reasonKo) {
+      setMessage(result.reasonKo);
+      return;
+    }
+    setMessage(`완료: 새로 만든 조각 ${result.prepared}개 · 이미 있던 조각 ${result.skipped}개`);
+    if (mode === "auto") setPrefs({ audioPrebuildLastRunKey: autoRunKey });
+  }
+
+  function stopPrebuild() {
+    stopSupertonicPrecache();
+    setBusy(false);
+    setMessage("듣기자료 만들기를 중지했습니다.");
+  }
+
+  return (
+    <section className="rounded-2xl border border-border bg-surface p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold text-accent-strong">듣기자료 미리만들어놓기</div>
+          <h2 className="mt-1 font-semibold">{levelLabel} 본문듣기 첫 대기 줄이기</h2>
+          <p className="mt-1 text-sm text-text-muted">
+            사용법: 1. Supertonic 준비 후 2. 학습 전에 이 버튼을 누르고 3. 완료 후 본문듣기를 누르면 더 빨리 시작됩니다.
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] ${supertonicReady ? "bg-success/10 text-success" : "bg-surface-2 text-text-muted"}`}>
+          {supertonicReady ? "준비됨" : "준비 필요"}
+        </span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-1.5">
+        {(["today", "recommended", "course"] as AudioPrebuildScope[]).map(option => (
+          <button
+            key={option}
+            onClick={() => setPrefs({ audioPrebuildScope: option })}
+            disabled={busy}
+            className={`rounded-xl border px-2 py-2 text-xs font-medium disabled:opacity-50 ${
+              scope === option ? "border-accent bg-accent/20" : "border-border bg-surface-2 text-text-muted"
+            }`}
+          >
+            {prebuildScopeLabel(option, todayItems.length, recommendedItems.length, courseItems.length)}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
+        <button
+          onClick={() => busy ? stopPrebuild() : void runPrebuild("manual")}
+          className={`rounded-xl px-4 py-2.5 text-sm font-medium ${busy ? "bg-danger text-white" : "bg-accent text-[#2A2522]"}`}
+        >
+          {busy ? "중지" : "지금 만들기"}
+        </button>
+        <button
+          onClick={() => nav("/toolbelt")}
+          className="rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-xs font-medium"
+        >
+          TTS 설정
+        </button>
+      </div>
+
+      {progress && busy && (
+        <div className="mt-3 rounded-xl bg-surface-2 p-3 text-xs text-text-muted">
+          <div className="flex items-center justify-between gap-3">
+            <span className="truncate">합성 중: {progress.label || "준비 중"}</span>
+            <span>{progress.current}/{progress.total}</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface">
+            <div
+              className="h-full bg-accent transition-[width]"
+              style={{ width: `${Math.round((progress.current / Math.max(1, progress.total)) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 rounded-xl border border-border bg-surface-2 p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={!!prefs.audioPrebuildAutoEnabled}
+            onChange={event => setPrefs({ audioPrebuildAutoEnabled: event.target.checked })}
+          />
+          매일 한 번 자동으로 만들기
+        </label>
+        <div className="mt-2 flex items-center gap-2 text-xs text-text-muted">
+          <span>실행 시간</span>
+          <input
+            type="time"
+            value={time}
+            onChange={event => setPrefs({ audioPrebuildTime: event.target.value || "07:00" })}
+            className="rounded-lg border border-border bg-surface px-2 py-1 text-text"
+          />
+          <span>앱이 열려 있을 때 실행</span>
+        </div>
+      </div>
+
+      {message && (
+        <p className="mt-2 rounded-xl bg-surface-2 p-3 text-xs text-text-muted">
+          {message}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function prebuildItemsForScope(
+  scope: AudioPrebuildScope,
+  todayItems: ListeningPrebuildItem[],
+  recommendedItems: ListeningPrebuildItem[],
+  courseItems: ListeningPrebuildItem[],
+) {
+  if (scope === "course") return courseItems;
+  if (scope === "recommended") return recommendedItems;
+  return todayItems;
+}
+
+function prebuildScopeLabel(scope: AudioPrebuildScope, todayCount: number, recommendedCount: number, courseCount: number) {
+  if (scope === "course") return `전체 ${courseCount}`;
+  if (scope === "recommended") return `맞춤 ${recommendedCount}`;
+  return `오늘 ${todayCount}`;
+}
+
+function uniqueListeningItems(items: ListeningPrebuildItem[]) {
+  const seen = new Set<string>();
+  return items.filter(item => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function timeHasPassed(value: string) {
+  const [hourText, minuteText] = value.split(":");
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return false;
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes() >= hour * 60 + minute;
 }

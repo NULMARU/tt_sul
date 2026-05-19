@@ -17,6 +17,8 @@
 | 5 | 합성음 시작 전 대기시간에 `본문 듣기 준비 중 · 중지` 스피너 상태 표시 추가 | [web/src/lib/tts.ts](../web/src/lib/tts.ts), [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
 | 6 | 중·상급 본문듣기 중 페이지/탭 이동 시 TTS를 기다리지 않고 즉시 중단 | [web/src/routes/IntermediateReading.tsx](../web/src/routes/IntermediateReading.tsx), [web/src/routes/AdvancedArticle.tsx](../web/src/routes/AdvancedArticle.tsx) |
 | 7 | 본문듣기 버튼 라벨을 `본문듣기`/`합성중`/`재생중` 세 상태로 단순화 | [web/src/routes/IntermediateReading.tsx](../web/src/routes/IntermediateReading.tsx), [web/src/routes/AdvancedArticle.tsx](../web/src/routes/AdvancedArticle.tsx) |
+| 8 | `오늘` 화면에 듣기자료 사전생성 카드, 사용법, 범위 선택, 예약 실행 옵션 추가 | [src/types/schema.ts](../src/types/schema.ts), [web/src/routes/Home.tsx](../web/src/routes/Home.tsx) |
+| 9 | Supertonic 사전합성 API와 중지 제어 추가, 음성 캐시 최대 엔트리 96개로 확장 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
 
 ### 설계 메모
 
@@ -24,6 +26,8 @@
 - 첫 조각 재생 중 다음 조각을 미리 합성하고 Cache Storage에 저장하므로, 사용자가 보통처럼 2~3회 반복 듣는 경우 점점 즉시 재생에 가까워집니다.
 - `stopSpeak()`가 Supertonic 합성 세션까지 취소하도록 연결해, 사용자가 재생 중 같은 버튼을 다시 누르면 현재 오디오와 다음 조각 진행이 중단됩니다.
 - 버튼 문구는 `본문듣기`를 기본값으로 유지하고, 합성 대기 중에는 `합성중`, 실제 재생 중에는 `재생중`으로 짧게 표시합니다. 사용자가 버튼이 사라졌다고 느끼지 않도록 하기 위함입니다.
+- 예약 실행은 브라우저 제약상 서버 백그라운드 작업이 아니라, 앱이 열려 있고 지정 시간이 지났을 때 현재 과정에서 하루 1회 실행하는 방식입니다.
+- 유료 Supertone API는 품질/지연시간 개선 가능성이 있지만 비용, rate limit, 300자 요청 제한, 개인정보 전송 이슈가 있어 별도 opt-in 기능으로 분리하는 것이 안전합니다.
 
 ### 🧪 검증
 

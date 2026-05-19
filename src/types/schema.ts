@@ -591,6 +591,7 @@ export interface RecommendationFeedback {
 
 export type AdaptiveUiLevel = "off" | "safe" | "suggested" | "experimental";
 export type TtsProvider = "system" | "supertonic";
+export type AudioPrebuildScope = "today" | "recommended" | "course";
 
 export interface AdaptiveUiPatch {
   id: string;
@@ -706,6 +707,10 @@ export interface UserState {
     supertonicTtsConsentVersion?: string;
     supertonicTtsAssetsCachedAt?: string;
     supertonicTtsLastError?: string;
+    audioPrebuildAutoEnabled?: boolean;
+    audioPrebuildTime?: string; // "07:20"
+    audioPrebuildScope?: AudioPrebuildScope;
+    audioPrebuildLastRunKey?: string;
     timeColorAuto: boolean;
     notificationEnabled: boolean;
     notificationTime?: string; // "07:20"
