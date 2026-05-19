@@ -128,11 +128,12 @@ export function IntermediateReading() {
           </div>
           <button
             onClick={playBody}
-            className={`w-full rounded-xl px-3 py-2 text-sm font-medium sm:w-auto sm:shrink-0 ${
+            aria-label={bodyListeningActive ? "본문듣기 중지" : "본문듣기"}
+            className={`w-full min-w-[96px] whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium sm:w-auto sm:shrink-0 ${
               bodyListeningActive ? "bg-danger text-white" : "bg-accent text-[#2A2522]"
             }`}
           >
-            <BodyListenButtonContent state={bodyListenState} idleLabel="본문 듣기" />
+            <BodyListenButtonContent state={bodyListenState} idleLabel="본문듣기" />
           </button>
           {bodyListenState === "preparing" && (
             <div className="flex items-center gap-2 rounded-xl border border-accent/40 bg-surface/80 px-3 py-2 text-xs text-text-muted">
@@ -250,11 +251,11 @@ function BodyListenButtonContent({ state, idleLabel }: { state: BodyListenState;
     return (
       <span className="inline-flex items-center justify-center gap-2">
         <LoadingSpinner />
-        본문 듣기 준비 중 · 중지
+        합성중
       </span>
     );
   }
-  if (state === "playing") return <span>본문 듣기 중지</span>;
+  if (state === "playing") return <span>재생중</span>;
   return <span>{idleLabel}</span>;
 }
 
