@@ -12,6 +12,13 @@ interface TtsSnapshot {
   startedAt: number | null;
 }
 
+export interface SpeakOptions {
+  lang?: "en" | "ko";
+  rate?: number;
+  pitch?: number;
+  onStart?: () => void;
+}
+
 let snapshot: TtsSnapshot = {
   speaking: false,
   currentText: "",
@@ -40,7 +47,7 @@ export function findVoice(lang: "en" | "ko"): SpeechSynthesisVoice | undefined {
   return voices.find(v => v.lang.startsWith("ko-KR")) || voices.find(v => v.lang.startsWith("ko"));
 }
 
-export async function speak(text: string, opts: { lang?: "en" | "ko"; rate?: number; pitch?: number } = {}): Promise<void> {
+export async function speak(text: string, opts: SpeakOptions = {}): Promise<void> {
   if (!text.trim()) return Promise.resolve();
   stopSpeak();
   const token = ++activeToken;
@@ -70,6 +77,7 @@ export async function speak(text: string, opts: { lang?: "en" | "ko"; rate?: num
     if (v) u.voice = v;
 
     const finish = () => finishToken(token);
+    u.onstart = () => opts.onStart?.();
     u.onend = finish;
     u.onerror = finish;
 

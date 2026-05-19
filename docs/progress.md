@@ -14,16 +14,21 @@
 | 2 | 조각별 음성 캐시를 추가해 같은 글 반복 듣기와 다음 조각 준비를 더 빠르게 처리 | [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
 | 3 | 중급 리딩 `듣기` 버튼을 재생 중 `중지` 버튼으로 전환 | [web/src/routes/IntermediateReading.tsx](../web/src/routes/IntermediateReading.tsx) |
 | 4 | 상급 글 `본문 듣기` 버튼을 재생 중 `중지` 버튼으로 전환 | [web/src/routes/AdvancedArticle.tsx](../web/src/routes/AdvancedArticle.tsx) |
+| 5 | 합성음 시작 전 대기시간에 `본문 듣기 준비 중 · 중지` 스피너 상태 표시 추가 | [web/src/lib/tts.ts](../web/src/lib/tts.ts), [web/src/lib/supertonic-tts.ts](../web/src/lib/supertonic-tts.ts) |
+| 6 | 중·상급 본문듣기 중 페이지/탭 이동 시 TTS를 기다리지 않고 즉시 중단 | [web/src/routes/IntermediateReading.tsx](../web/src/routes/IntermediateReading.tsx), [web/src/routes/AdvancedArticle.tsx](../web/src/routes/AdvancedArticle.tsx) |
 
 ### 설계 메모
 
 - 첫 클릭은 여전히 런타임/모델 cold start 영향을 받을 수 있지만, 긴 본문 전체 합성이 끝날 때까지 기다리지 않고 첫 조각이 준비되면 바로 재생합니다.
 - 첫 조각 재생 중 다음 조각을 미리 합성하고 Cache Storage에 저장하므로, 사용자가 보통처럼 2~3회 반복 듣는 경우 점점 즉시 재생에 가까워집니다.
 - `stopSpeak()`가 Supertonic 합성 세션까지 취소하도록 연결해, 사용자가 재생 중 같은 버튼을 다시 누르면 현재 오디오와 다음 조각 진행이 중단됩니다.
+- 버튼 문구는 `본문 듣기`를 유지한 채 `준비 중`/`중지` 상태를 함께 보여주도록 조정했습니다. 사용자가 버튼이 사라졌다고 느끼지 않도록 하기 위함입니다.
 
 ### 🧪 검증
 
 - ✅ `web`: `npm run build` 성공
+- ✅ 모바일 폭 시각 QA: 중급/상급 본문듣기 버튼 표시 확인
+- ✅ CDP QA: 상급 글에서 본문듣기 후 다른 페이지 이동 시 대기 상태가 남지 않음 확인
 
 ## 🌙 세션 #21 — Supertonic 반복 듣기용 음성 캐시
 

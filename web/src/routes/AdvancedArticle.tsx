@@ -5,9 +5,10 @@ import type { AdvancedArticle, AdvancedArticleCategory, SpeakingRubricItem } fro
 import { ShadowingRecorder } from "../components/ShadowingRecorder";
 import { gradeWriting, llmAvailable } from "../lib/llm";
 import { useStore } from "../lib/store";
-import { speak, stopSpeak, waitForTtsIdle } from "../lib/tts";
+import { speak, stopSpeak } from "../lib/tts";
 
 type SectionId = "read" | "debate" | "write" | "speak";
+type BodyListenState = "idle" | "preparing" | "playing";
 type RubricScores = Partial<Record<SpeakingRubricItem["criterion"], number>>;
 
 export function AdvancedArticle() {
@@ -32,7 +33,8 @@ export function AdvancedArticle() {
   const [speakingNote, setSpeakingNote] = useState("");
   const [speakingSaved, setSpeakingSaved] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [playing, setPlaying] = useState<"body" | "expression" | null>(null);
+  const [bodyListenState, setBodyListenState] = useState<BodyListenState>("idle");
+  const [expressionPlaying, setExpressionPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
   const playRunRef = useRef(0);
 
@@ -47,16 +49,39 @@ export function AdvancedArticle() {
     setDebateNote(progress?.debateNote ?? "");
   }, [article?.id, progress?.debateNote, progress?.debateStance, progress?.opinionDraft, progress?.summaryDraft]);
 
+  useEffect(() => () => {
+    playRunRef.current += 1;
+    stopSpeak();
+  }, []);
+
   if (!article) {
     return <div className="px-6 py-12 text-center text-text-muted">상급 글을 찾을 수 없어요.</div>;
   }
 
   const currentArticle = article;
+  const bodyListeningActive = bodyListenState !== "idle";
 
-  async function saveAndComplete() {
+  function stopCurrentAudio() {
+    playRunRef.current += 1;
+    stopSpeak();
+    setBodyListenState("idle");
+    setExpressionPlaying(false);
+  }
+
+  function stopAndGo(path: string) {
+    stopCurrentAudio();
+    nav(path);
+  }
+
+  function changeSection(nextSection: SectionId) {
+    stopCurrentAudio();
+    setSection(nextSection);
+  }
+
+  function saveAndComplete() {
     saveDraft(currentArticle.id, { summaryDraft, opinionDraft });
     completeArticle(currentArticle.id);
-    await waitForTtsIdle();
+    stopCurrentAudio();
     nav("/advanced");
   }
 
@@ -83,41 +108,46 @@ export function AdvancedArticle() {
   }
 
   async function playArticleBody() {
-    if (playing === "body") {
-      playRunRef.current += 1;
-      stopSpeak();
-      setPlaying(null);
+    if (bodyListeningActive) {
+      stopCurrentAudio();
       return;
     }
 
     const runId = playRunRef.current + 1;
     playRunRef.current = runId;
     stopSpeak();
-    setPlaying("body");
+    setBodyListenState("preparing");
+    setExpressionPlaying(false);
     recordListening(currentArticle.id);
     try {
-      await speak(currentArticle.body, { rate: 0.86 });
+      await speak(currentArticle.body, {
+        rate: 0.86,
+        onStart: () => {
+          if (playRunRef.current === runId) setBodyListenState("playing");
+        },
+      });
     } finally {
-      if (playRunRef.current === runId) setPlaying(null);
+      if (playRunRef.current === runId) setBodyListenState("idle");
     }
   }
 
   async function playExpression(expression: string) {
     const runId = playRunRef.current + 1;
     playRunRef.current = runId;
+    setBodyListenState("idle");
     recordListening(currentArticle.id, true);
-    setPlaying("expression");
+    setExpressionPlaying(true);
     try {
       await speak(expression, { rate: 0.84 });
     } finally {
-      if (playRunRef.current === runId) setPlaying(null);
+      if (playRunRef.current === runId) setExpressionPlaying(false);
     }
   }
 
   return (
     <div className="px-5 pt-4 pb-4 flex flex-col gap-4">
       <header className="flex items-center gap-3">
-        <button onClick={async () => { await waitForTtsIdle(); nav("/advanced"); }} className="w-9 h-9 rounded-full hover:bg-surface-2">←</button>
+        <button onClick={() => stopAndGo("/advanced")} className="w-9 h-9 rounded-full hover:bg-surface-2">←</button>
         <div className="flex-1 min-w-0">
           <div className="text-xs text-text-muted">Stage 3 · {categoryLabel(article.category)}</div>
           <h1 className="text-xl font-bold truncate">{categoryEmoji(article.category)} {article.title}</h1>
@@ -184,7 +214,7 @@ export function AdvancedArticle() {
         ] as Array<[SectionId, string]>).map(item => (
           <button
             key={item[0]}
-            onClick={() => setSection(item[0])}
+            onClick={() => changeSection(item[0])}
             className={`rounded-xl border px-2 py-2 text-xs font-medium ${section === item[0] ? "border-accent bg-accent/20" : "border-border bg-surface text-text-muted"}`}
           >
             {item[1]}
@@ -196,7 +226,8 @@ export function AdvancedArticle() {
         <ReadSection
           article={article}
           progress={progress}
-          playing={playing}
+          bodyListenState={bodyListenState}
+          expressionPlaying={expressionPlaying}
           onPlayBody={playArticleBody}
           onPlayExpression={playExpression}
         />
@@ -416,16 +447,20 @@ export function AdvancedArticle() {
 function ReadSection({
   article,
   progress,
-  playing,
+  bodyListenState,
+  expressionPlaying,
   onPlayBody,
   onPlayExpression,
 }: {
   article: AdvancedArticle;
   progress?: ReturnType<typeof useStore.getState>["advancedArticleProgress"][string];
-  playing: "body" | "expression" | null;
+  bodyListenState: BodyListenState;
+  expressionPlaying: boolean;
   onPlayBody: () => void;
   onPlayExpression: (expression: string) => void;
 }) {
+  const bodyListeningActive = bodyListenState !== "idle";
+
   return (
     <>
       <section className="rounded-2xl border border-accent/40 bg-accent/10 p-5">
@@ -442,11 +477,17 @@ function ReadSection({
           <button
             onClick={onPlayBody}
             className={`w-full rounded-xl px-3 py-2 text-sm font-medium sm:w-auto sm:shrink-0 ${
-              playing === "body" ? "bg-danger text-white" : "bg-accent text-[#2A2522]"
+              bodyListeningActive ? "bg-danger text-white" : "bg-accent text-[#2A2522]"
             }`}
           >
-            {playing === "body" ? "중지" : "본문 듣기"}
+            <BodyListenButtonContent state={bodyListenState} idleLabel="본문 듣기" />
           </button>
+          {bodyListenState === "preparing" && (
+            <div className="flex items-center gap-2 rounded-xl border border-accent/40 bg-surface/80 px-3 py-2 text-xs text-text-muted sm:basis-full">
+              <LoadingSpinner />
+              합성음을 준비하고 있어요. 준비되면 바로 재생됩니다.
+            </div>
+          )}
         </div>
       </section>
 
@@ -467,7 +508,7 @@ function ReadSection({
             <button
               key={expression.en}
               onClick={() => onPlayExpression(expression.en)}
-              disabled={playing === "expression"}
+              disabled={expressionPlaying}
               className="rounded-xl bg-surface-2 p-3 text-left disabled:opacity-60"
             >
               <div className="text-xs text-text-muted">듣고 바로 따라 말하기</div>
@@ -478,6 +519,28 @@ function ReadSection({
         </div>
       </section>
     </>
+  );
+}
+
+function BodyListenButtonContent({ state, idleLabel }: { state: BodyListenState; idleLabel: string }) {
+  if (state === "preparing") {
+    return (
+      <span className="inline-flex items-center justify-center gap-2">
+        <LoadingSpinner />
+        본문 듣기 준비 중 · 중지
+      </span>
+    );
+  }
+  if (state === "playing") return <span>본문 듣기 중지</span>;
+  return <span>{idleLabel}</span>;
+}
+
+function LoadingSpinner() {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+    />
   );
 }
 

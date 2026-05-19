@@ -238,7 +238,7 @@ export function supertonicNoticeItems(): string[] {
 
 export async function trySpeakWithSupertonic(
   text: string,
-  opts: { lang?: "en" | "ko"; rate?: number; pitch?: number } = {},
+  opts: { lang?: "en" | "ko"; rate?: number; pitch?: number; onStart?: () => void } = {},
 ): Promise<SupertonicSpeakResult> {
   const status = supertonicRuntimeStatus();
   if (!supertonicConsentAccepted()) {
@@ -257,13 +257,13 @@ export async function trySpeakWithSupertonic(
     const cachedAudio = await getCachedSupertonicAudio(audioKey);
     assertSupertonicRun(runId);
     if (cachedAudio) {
-      await playAudioBlob(cachedAudio, runId);
+      await playAudioBlob(cachedAudio, runId, opts.onStart);
       return { started: true };
     }
 
     const runtime = await getRuntime(status.backend === "webgpu" ? "webgpu" : "wasm");
     assertSupertonicRun(runId);
-    await playSupertonicText(runtime, text, lang, speed, audioKey, runId);
+    await playSupertonicText(runtime, text, lang, speed, audioKey, runId, opts.onStart);
     return { started: true };
   } catch (error) {
     if (error instanceof SupertonicCancelledError) {
@@ -307,7 +307,7 @@ function stopActiveSupertonicAudio() {
   done?.();
 }
 
-async function playAudioBlob(audio: Blob, runId: number): Promise<void> {
+async function playAudioBlob(audio: Blob, runId: number, onStart?: () => void): Promise<void> {
   assertSupertonicRun(runId);
   stopActiveSupertonicAudio();
   const url = URL.createObjectURL(audio);
@@ -315,6 +315,12 @@ async function playAudioBlob(audio: Blob, runId: number): Promise<void> {
   activeAudio = audioEl;
   await new Promise<void>((resolve, reject) => {
     let settled = false;
+    let started = false;
+    const markStarted = () => {
+      if (started) return;
+      started = true;
+      onStart?.();
+    };
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
@@ -325,9 +331,10 @@ async function playAudioBlob(audio: Blob, runId: number): Promise<void> {
       else resolve();
     };
     activeAudioDone = () => finish();
+    audioEl.onplaying = markStarted;
     audioEl.onended = () => finish();
     audioEl.onerror = () => finish(new Error("브라우저 오디오 재생 실패"));
-    audioEl.play().catch(error => {
+    audioEl.play().then(markStarted).catch(error => {
       const message = error instanceof Error ? error.message : String(error);
       finish(new Error(message));
     });
@@ -460,13 +467,20 @@ async function playSupertonicText(
   speed: number,
   fullAudioKey: string,
   runId: number,
+  onStart?: () => void,
 ): Promise<void> {
+  let startNotified = false;
+  const notifyStart = () => {
+    if (startNotified) return;
+    startNotified = true;
+    onStart?.();
+  };
   const chunks = chunkText(text, lang === "ko" ? STREAMING_CHUNK_MAX_KO : STREAMING_CHUNK_MAX_EN);
   if (chunks.length <= 1) {
     const audio = await synthesize(runtime, text, lang, speed, runId);
     assertSupertonicRun(runId);
     await putCachedSupertonicAudio(fullAudioKey, audio);
-    await playAudioBlob(audio, runId);
+    await playAudioBlob(audio, runId, notifyStart);
     return;
   }
 
@@ -481,7 +495,7 @@ async function playSupertonicText(
       nextAudioPromise.catch(() => undefined);
     }
 
-    await playAudioBlob(audio, runId);
+    await playAudioBlob(audio, runId, notifyStart);
   }
 }
 

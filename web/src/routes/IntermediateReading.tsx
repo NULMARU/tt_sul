@@ -5,7 +5,9 @@ import {
   INTERMEDIATE_SOURCE_PROFILE_BY_ID,
 } from "@shared/data/intermediate-readings.seed";
 import { useStore } from "../lib/store";
-import { speak, stopSpeak, waitForTtsIdle } from "../lib/tts";
+import { speak, stopSpeak } from "../lib/tts";
+
+type BodyListenState = "idle" | "preparing" | "playing";
 
 export function IntermediateReading() {
   const { id } = useParams();
@@ -18,12 +20,17 @@ export function IntermediateReading() {
   const completeReading = useStore(s => s.completeIntermediateReading);
   const [selected, setSelected] = useState<number | null>(null);
   const [answered, setAnswered] = useState(false);
-  const [playing, setPlaying] = useState(false);
+  const [bodyListenState, setBodyListenState] = useState<BodyListenState>("idle");
   const playRunRef = useRef(0);
 
   useEffect(() => {
     if (lesson) recordRead(lesson.id);
   }, [lesson, recordRead]);
+
+  useEffect(() => () => {
+    playRunRef.current += 1;
+    stopSpeak();
+  }, []);
 
   if (!lesson || !source) {
     return <div className="px-6 py-12 text-center text-text-muted">중급 리딩을 찾을 수 없어요.</div>;
@@ -32,24 +39,30 @@ export function IntermediateReading() {
   const currentLesson = lesson;
   const currentSource = source;
   const correct = selected === currentLesson.comprehension.answerIndex;
+  const bodyListeningActive = bodyListenState !== "idle";
 
   async function playBody() {
-    if (playing) {
+    if (bodyListeningActive) {
       playRunRef.current += 1;
       stopSpeak();
-      setPlaying(false);
+      setBodyListenState("idle");
       return;
     }
 
     const runId = playRunRef.current + 1;
     playRunRef.current = runId;
     stopSpeak();
-    setPlaying(true);
+    setBodyListenState("preparing");
     recordListening(currentLesson.id);
     try {
-      await speak(currentLesson.body, { rate: 0.88 });
+      await speak(currentLesson.body, {
+        rate: 0.88,
+        onStart: () => {
+          if (playRunRef.current === runId) setBodyListenState("playing");
+        },
+      });
     } finally {
-      if (playRunRef.current === runId) setPlaying(false);
+      if (playRunRef.current === runId) setBodyListenState("idle");
     }
   }
 
@@ -58,8 +71,17 @@ export function IntermediateReading() {
     await speak(sentence, { rate: 0.84 });
   }
 
-  async function complete() {
-    await waitForTtsIdle();
+  function stopAndGo(path: string) {
+    playRunRef.current += 1;
+    stopSpeak();
+    setBodyListenState("idle");
+    nav(path);
+  }
+
+  function complete() {
+    playRunRef.current += 1;
+    stopSpeak();
+    setBodyListenState("idle");
     completeReading(currentLesson.id, answered ? correct : undefined);
     nav("/intermediate-readings");
   }
@@ -67,7 +89,7 @@ export function IntermediateReading() {
   return (
     <div className="px-5 pt-4 pb-4 flex flex-col gap-4">
       <header className="flex items-center gap-3">
-        <button onClick={async () => { await waitForTtsIdle(); nav("/intermediate-readings"); }} className="w-9 h-9 rounded-full hover:bg-surface-2">←</button>
+        <button onClick={() => stopAndGo("/intermediate-readings")} className="w-9 h-9 rounded-full hover:bg-surface-2">←</button>
         <div className="flex-1 min-w-0">
           <div className="text-xs text-text-muted">Stage 2 · {currentLesson.difficulty} 리딩</div>
           <h1 className="text-xl font-bold truncate">{currentLesson.emoji} {currentLesson.title}</h1>
@@ -107,11 +129,17 @@ export function IntermediateReading() {
           <button
             onClick={playBody}
             className={`w-full rounded-xl px-3 py-2 text-sm font-medium sm:w-auto sm:shrink-0 ${
-              playing ? "bg-danger text-white" : "bg-accent text-[#2A2522]"
+              bodyListeningActive ? "bg-danger text-white" : "bg-accent text-[#2A2522]"
             }`}
           >
-            {playing ? "중지" : "듣기"}
+            <BodyListenButtonContent state={bodyListenState} idleLabel="본문 듣기" />
           </button>
+          {bodyListenState === "preparing" && (
+            <div className="flex items-center gap-2 rounded-xl border border-accent/40 bg-surface/80 px-3 py-2 text-xs text-text-muted">
+              <LoadingSpinner />
+              합성음을 준비하고 있어요. 준비되면 바로 재생됩니다.
+            </div>
+          )}
         </div>
       </section>
 
@@ -214,5 +242,27 @@ export function IntermediateReading() {
         중급 리딩 학습완료
       </button>
     </div>
+  );
+}
+
+function BodyListenButtonContent({ state, idleLabel }: { state: BodyListenState; idleLabel: string }) {
+  if (state === "preparing") {
+    return (
+      <span className="inline-flex items-center justify-center gap-2">
+        <LoadingSpinner />
+        본문 듣기 준비 중 · 중지
+      </span>
+    );
+  }
+  if (state === "playing") return <span>본문 듣기 중지</span>;
+  return <span>{idleLabel}</span>;
+}
+
+function LoadingSpinner() {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+    />
   );
 }
