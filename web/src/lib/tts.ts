@@ -1,5 +1,6 @@
 import { useStore } from "./store";
 import { stopSupertonicAudio, trySpeakWithSupertonic } from "./supertonic-tts";
+import type { TtsProvider } from "@shared/types/schema";
 
 let activeToken = 0;
 let activeResolve: (() => void) | null = null;
@@ -16,6 +17,7 @@ export interface SpeakOptions {
   lang?: "en" | "ko";
   rate?: number;
   pitch?: number;
+  provider?: TtsProvider;
   onStart?: () => void;
 }
 
@@ -54,7 +56,7 @@ export async function speak(text: string, opts: SpeakOptions = {}): Promise<void
   setSnapshot({ speaking: true, currentText: text, startedAt: Date.now() });
   useStore.getState().recordTtsPlay(text);
 
-  if (useStore.getState().prefs.ttsProvider === "supertonic") {
+  if (effectiveTtsProvider(opts) === "supertonic") {
     const supertonic = await trySpeakWithSupertonic(text, opts);
     if (supertonic.started) {
       finishToken(token);
@@ -139,6 +141,13 @@ export function vibrate(ms: number | number[] = 15) {
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     try { navigator.vibrate(ms); } catch { /* ignore */ }
   }
+}
+
+function effectiveTtsProvider(opts: SpeakOptions): TtsProvider {
+  if (opts.provider) return opts.provider;
+  const state = useStore.getState();
+  if ((state.currentCourseLevel ?? "beginner") === "beginner") return "system";
+  return state.prefs.ttsProvider ?? "system";
 }
 
 function finishToken(token: number) {

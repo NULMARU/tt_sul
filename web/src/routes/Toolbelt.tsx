@@ -459,7 +459,10 @@ function TtsProviderSection() {
     setBusy("test");
     setMessage("");
     try {
-      await speak("A small satellite can do a big job.", { rate: prefs.ttsRate });
+      await speak("A small satellite can do a big job.", {
+        rate: prefs.ttsRate,
+        provider: safeModeActive ? "supertonic" : "system",
+      });
       setMessage(assetStatus?.cached && safeModeActive
         ? "테스트 재생이 끝났습니다. 실패한 경우에는 시스템 TTS로 자동 전환됩니다."
         : "테스트 재생이 끝났습니다. 모델 캐시 전에는 시스템 TTS로 재생됩니다.");

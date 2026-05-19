@@ -22,6 +22,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - 공식 API 모델 문서상 품질과 지연시간 선택지가 분리되어 있습니다. `Sona Speech 2`는 “Best overall speech quality”, `Sona Speech 2 Flash`는 “Low-latency & lightweight inference”, `Supertonic API 1`은 “Minimal configuration & fastest setup” 용도로 안내됩니다.
 - 따라서 유료 API를 쓰면 발음/표현력은 `Sona Speech 2` 계열에서 개선될 가능성이 큽니다. 합성 시작 지연은 `Sona Speech 2 Flash` 또는 스트리밍 지원 모델을 쓰면 개선될 수 있습니다. 다만 네트워크 왕복, 요청당 300자 제한, rate limit, API 비용, 사용자 학습 텍스트가 외부 서버로 전송되는 개인정보 이슈가 생깁니다.
 - 현재 앱의 안전한 기본 방향은 유지합니다: 기본은 무료 온디바이스 Supertonic + 캐시/사전생성으로 체감 지연을 줄이고, 유료 API는 향후 별도 opt-in, API 키 보관, 개인정보 고지, 서버 프록시, 사용량 제한을 갖춘 실험 기능으로 검토합니다.
+- 초급 과정은 짧은 표현을 빠르게 반복하는 흐름이 핵심이므로, 사용자가 Supertonic을 켜도 기본 재생은 브라우저 내장 TTS를 사용합니다. Supertonic은 중급/상급 장문 듣기와 사전생성 캐시에서 주로 사용합니다.
 
 ## 적합한 점
 
@@ -64,6 +65,7 @@ Supertonic은 현재 앱에 “선택형 고품질 온디바이스 TTS”로 붙
 - [x] 합성 결과 WAV 캐시, 용량 제한, LRU형 자동 정리, 수동 삭제 UI 추가
 - [x] 장문 본문듣기 조각 단위 우선 재생과 재생 중 중지 제어 추가
 - [x] `오늘` 화면에 듣기자료 사전생성 수동/예약 UI 추가
+- [x] 초급 과정 기본 TTS를 시스템 내장 TTS로 고정하고 중급/상급만 Supertonic 설정을 따르도록 분리
 - [x] ONNX Runtime Web WebGPU 우선, WASM fallback 어댑터 추가
 - [x] Supertonic 실패 시 시스템 TTS fallback 유지
 - [x] Supertonic 모델과 예제 코드, ONNX Runtime Web 고지 문서 추가
